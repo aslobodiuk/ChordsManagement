@@ -16,7 +16,25 @@ class Song:
     artist: str
     lines: list[Line]
 
-def convert_input_files_into_songs(filenames: list[str]) -> list[Song]:
+def convert_raw_data_into_song(title: str, artist: str, lines: list[str]) -> Song:
+    result_lines = list()
+    chords_pattern = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
+    for line in lines:
+        line = line.strip()
+        chords = defaultdict(str)
+        matches = re.finditer(chords_pattern, line)
+        sub = 0  # we need subtractor for correct chord position in final line
+        for match in matches:
+            chord = match.group(1)  # chord without brackets
+            start = match.start()
+            end = match.end()
+            chords[start - sub] = chord if not chords[start - sub] else f"{chords[start - sub]} {chord}"
+            sub += end - start
+        line = re.sub(chords_pattern, "", line)
+        result_lines.append(Line(line, chords))
+    return Song(title, artist, result_lines)
+
+def get_songs_from_files(filenames: list[str]) -> list[Song]:
     """
     :param filenames: list of txt files. Format:
         title
@@ -25,29 +43,26 @@ def convert_input_files_into_songs(filenames: list[str]) -> list[Song]:
                 (Bm)Help! I need some(Bm/A)body, (G)help! Not just anybody,\n(E7)Help! You know I need someone, (A)help!
     :return: list of Song objects
     """
-    chords_pattern = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
     songs = []
     for filename in filenames:
-        result_lines = list()
         with open(filename, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-            title = lines[0].strip()
-            artist = lines[1].strip()
-            for line in lines[2:]:
-                line = line.strip()
-                chords = defaultdict(str)
-                matches = re.finditer(chords_pattern, line)
-                sub = 0 # we need subtractor for correct chord position in final line
-                for match in matches:
-                    chord = match.group(1)  # chord without brackets
-                    start = match.start()
-                    end = match.end()
-                    chords[start - sub] = chord if not chords[start - sub] else f"{chords[start - sub]} {chord}"
-                    sub += end - start
-                line = re.sub(chords_pattern, "", line)
-                result_lines.append(Line(line, chords))
-            songs.append(Song(title, artist, result_lines))
+            song = convert_raw_data_into_song(lines[0].strip(), lines[1].strip(), lines[2:])
+            songs.append(song)
     return songs
+
+def get_song_from_string(input_string: str) -> Song:
+    """
+    :param input_string: string with specific format:
+        title
+        artist
+        song text - song lines with chords in brackets:
+                (Bm)Help! I need some(Bm/A)body, (G)help! Not just anybody,\n(E7)Help! You know I need someone, (A)help!
+    :return: Song object
+    """
+    lines = input_string.splitlines()
+    song = convert_raw_data_into_song(lines[0].strip(), lines[1].strip(), lines[2:])
+    return song
 
 def convert_line_chords_to_string(line: Line) -> str:
     """
