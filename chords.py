@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 from fpdf import FPDF
 
-
 @dataclass
 class Line:
     line: str
@@ -17,6 +16,12 @@ class Song:
     lines: list[Line]
 
 def convert_raw_data_into_song(title: str, artist: str, lines: list[str]) -> Song:
+    """
+    :param title: song title
+    :param artist: song artist
+    :param lines: list of song lines with chords in brackets
+    :return: Song object
+    """
     result_lines = list()
     chords_pattern = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
     for line in lines:
@@ -36,7 +41,7 @@ def convert_raw_data_into_song(title: str, artist: str, lines: list[str]) -> Son
 
 def get_songs_from_files(filenames: list[str]) -> list[Song]:
     """
-    :param filenames: list of txt files. Format:
+    :param filenames: list of filenames(*.txt). Format:
         title
         artist
         song text - song lines with chords in brackets:
@@ -47,7 +52,11 @@ def get_songs_from_files(filenames: list[str]) -> list[Song]:
     for filename in filenames:
         with open(filename, 'r', encoding='utf-8') as f:
             lines = f.readlines()
-            song = convert_raw_data_into_song(lines[0].strip(), lines[1].strip(), lines[2:])
+            song = convert_raw_data_into_song(
+                title=lines[0].strip(),
+                artist=lines[1].strip(),
+                lines=lines[2:]
+            )
             songs.append(song)
     return songs
 
@@ -61,7 +70,11 @@ def get_song_from_string(input_string: str) -> Song:
     :return: Song object
     """
     lines = input_string.splitlines()
-    song = convert_raw_data_into_song(lines[0].strip(), lines[1].strip(), lines[2:])
+    song = convert_raw_data_into_song(
+        title=lines[0].strip(),
+        artist=lines[1].strip(),
+        lines=lines[2:]
+    )
     return song
 
 def convert_line_chords_to_string(line: Line) -> str:
@@ -110,22 +123,7 @@ def create_song_pdf(pdf: FPDF, songs: list[Song]) -> str:
                 )
                 if song.lines[i].line or end_of_pure_chords_block:
                     pdf.cell(w=0, h=cell_height, text=song.lines[i].line, new_x="LMARGIN", new_y="NEXT")
-        """
-        v1
-        for line in song.lines:
-            cell_height = 3
-            if pdf.get_y() + 2 * cell_height > pdf.h - pdf.b_margin:
-                pdf.add_page()
-            chords_line = convert_line_chords_to_string(line)
-            if not line.line and not chords_line:
-                pdf.cell(w=0, h=2 * cell_height, new_x="LMARGIN", new_y="NEXT")
-            else:
-                pdf.cell(w=0, h=cell_height, text=chords_line, new_x="LMARGIN", new_y="NEXT")
-                if line.line:
-                    pdf.cell(w=0, h=cell_height, text=line.line, new_x="LMARGIN", new_y="NEXT")
-        """
 
-    # Save overlay to file
-    overlay_path = "overlay.pdf"
-    pdf.output(overlay_path)
-    return overlay_path
+    tmp_path = "tmp.pdf"
+    pdf.output(tmp_path)
+    return tmp_path

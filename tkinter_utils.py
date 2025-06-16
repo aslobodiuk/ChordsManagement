@@ -7,7 +7,7 @@ from pdf_utils import create_pdf_base, merge_pdf_files
 
 SONGS_FILENAME = f"{Path.home()}/Documents/songs.pdf"
 
-def save_file(window, text_edit):
+def save_file(window: tk.Tk, text_edit: tk.Text) -> None:
     filepath = asksaveasfilename(filetypes=[("Text files", "*.txt")])
 
     if not filepath:
@@ -17,7 +17,7 @@ def save_file(window, text_edit):
         f.write(text_edit.get("1.0", tk.END))
     window.title(f"Open file: {filepath}")
 
-def open_file(window, text_edit):
+def open_file(window: tk.Tk, text_edit: tk.Text) -> None:
     filepath = askopenfilename(filetypes=[("Text files", "*.txt")])
 
     if not filepath:
@@ -28,26 +28,25 @@ def open_file(window, text_edit):
         text_edit.insert("1.0", f.read())
     window.title(f"Open file: {filepath}")
 
-def to_pdf(window, text_edit):
+def to_pdf(window: tk.Tk, text_edit: tk.Text) -> None:
     text = text_edit.get("1.0", tk.END)
     pdf = create_pdf_base()
     tmp_file = create_song_pdf(pdf, [get_song_from_string(text),])
     merge_pdf_files(SONGS_FILENAME, tmp_file, SONGS_FILENAME)
     window.after(500, lambda: show_non_blocking_message(window))
 
-def to_pdf_multiple(window):
+def to_pdf_multiple(window: tk.Tk) -> None:
     file_paths = askopenfilenames(
         title="Select text files",
         filetypes=[("Text files", "*.txt")]
     )
     songs = get_songs_from_files(filenames=list(file_paths))
-    window.title(f"Open file: {file_paths}")
     pdf = create_pdf_base()
     tmp_file = create_song_pdf(pdf, songs)
     merge_pdf_files(SONGS_FILENAME, tmp_file, SONGS_FILENAME)
     window.after(500, lambda: show_non_blocking_message(window))
 
-def show_non_blocking_message(window, msg="Success!", duration=2000):
+def show_non_blocking_message(window: tk.Tk, msg: str = "Success!", duration: int = 2000) -> None:
     # Create a popup window
     popup = tk.Toplevel(window)
     popup.title("")

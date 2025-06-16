@@ -1,35 +1,6 @@
-import argparse
 import tkinter as tk
 
-from chords import get_songs_from_files, create_song_pdf
-from pdf_utils import create_pdf_base, merge_pdf_files
-from tkinter_utils import save_file, open_file, to_pdf, SONGS_FILENAME, to_pdf_multiple
-
-DATA_DIR = "input_data"
-
-"""
-def main_legacy() -> None:
-    parser = argparse.ArgumentParser(description="Process multiple txt files.")
-    parser.add_argument(
-        "filenames",  # Positional argument
-        nargs="+",  # One or more values
-        help="List of input filenames"
-    )
-    args = parser.parse_args()
-
-    for filename in args.filenames:
-        print(f"Processing: {filename}")
-
-    songs =get_songs_from_files(filenames=[f"{DATA_DIR}/{filename}" for filename in args.filenames])
-
-    for song in songs:
-        print("Title: ", song.title)
-        print("Artist: ", song.artist)
-
-    pdf = create_pdf_base()
-    tmp_file = create_song_pdf(pdf, songs)
-    merge_pdf_files(SONGS_FILENAME, tmp_file, SONGS_FILENAME)
-"""
+from tkinter_utils import save_file, open_file, to_pdf, to_pdf_multiple
 
 def main() -> None:
     window = tk.Tk()
