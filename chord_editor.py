@@ -12,40 +12,54 @@ class ChordEditor:
         self.root = root
         self.root.geometry("1200x800")
         self.root.title("Chord Converter")
+
+        self.button_mapper = {
+            'save': ("Save", self.save_file),
+            'open': ("Open", self.open_file),
+            'to_pdf': ("To PFD", self.to_pdf),
+            'to_pdf_multiple': ("To PDF (multiple)", self.to_pdf_multiple)
+        }
+        self.buttons = {}
+
+        self._setup_widgets()
+        self._configure_layout()
+        self._bind_events()
+
+    def _setup_widgets(self):
+        # set up frame with buttons
+        self.frame = tk.Frame(self.root, relief="raised", bd=2)
+        self.frame.grid(row=0, column=0, sticky="ns")
+
+        i = 0
+        for k, v in self.button_mapper.items():
+            self.buttons[k] = tk.Button(self.frame, text=v[0], command=v[1])
+            self.buttons[k].grid(row=i, column=0, padx=5, pady=5, sticky="ew")
+            i += 1
+        
+        # set up text edit widget
+        self.text_widget = tk.Text(self.root, font=("Times", 18))
+        self.text_widget.grid(row=0, column=1, sticky="nsew")
+        self.text_widget.tag_configure("chord", foreground="red")
+
+    def _configure_layout(self):
         self.root.rowconfigure(0, weight=1)
         self.root.columnconfigure(1, weight=1)
 
-        self.frame = tk.Frame(root, relief="raised", bd=2)
-        self.frame.grid(row=0, column=0, sticky="ns")
+    def _bind_events(self):
+        self.text_widget.bind("<Button-2>", self.on_text_widget_right_click)
 
-        save_button = tk.Button(self.frame, text="Save", command=self.save_file)
-        open_button = tk.Button(self.frame, text="Open", command=self.open_file)
-        to_pdf_button = tk.Button(self.frame, text="To PDF", command=self.to_pdf)
-        dir_to_pdf = tk.Button(self.frame, text="To PDF (multiple)", command=self.to_pdf_multiple)
-
-        save_button.grid(row=0, column=0, padx=5, pady=5, sticky="ew")
-        open_button.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
-        to_pdf_button.grid(row=2, column=0, padx=5, pady=5, sticky="ew")
-        dir_to_pdf.grid(row=3, column=0, padx=5, pady=5, sticky="ew")
-
-        self.text_edit = tk.Text(root, font=("Times", 18))
-        self.text_edit.grid(row=0, column=1, sticky="nsew")
-        self.text_edit.tag_configure("chord", foreground="red")
-        self.text_edit.bind("<Button-2>", self.handle_click)
-
-    def handle_click(self, event):
+    def on_text_widget_right_click(self, event):
         def create_entry():
-            index = self.text_edit.index(f"@{event.x},{event.y}")
-            entry = tk.Entry(self.text_edit, font=("Times", 18), width=5, justify='center')
-            entry.place(x=event.x-30, y=event.y-45)
+            index = self.text_widget.index(f"@{event.x},{event.y}")
+            entry = tk.Entry(self.text_widget, font=("Times", 18), width=5, justify='center')
+            entry.place(x=event.x, y=event.y - 45) # todo calculate this 45
             entry.focus_set()
-            entry.bind("<Return>", lambda event: self.input_chord(event, index))
-            print("You clicked at:", index)
+            entry.bind("<Return>", lambda e: self.input_chord(e, index))
         # Delay entry creation slightly so Text widget doesn't steal focus
         self.root.after(1, create_entry)
 
     def input_chord(self, event, index):
-        self.text_edit.insert(index, f"({event.widget.get()})", "chord")
+        self.text_widget.insert(index, f"({event.widget.get()})", "chord")
         event.widget.destroy()
 
     def save_file(self):
@@ -55,22 +69,23 @@ class ChordEditor:
             return
 
         with open(filepath, "w") as f:
-            f.write(self.text_edit.get("1.0", tk.END))
-        self.root.title(f"Open file: {filepath}")
+            f.write(self.text_widget.get("1.0", tk.END))
 
     def open_file(self):
-        filepath = askopenfilename(filetypes=[("Text files", "*.txt")])
+        filepath = askopenfilename(
+            title="Select text files",
+            filetypes=[("Text files", "*.txt")]
+        )
 
         if not filepath:
             return
 
-        self.text_edit.delete("1.0", tk.END)
+        self.text_widget.delete("1.0", tk.END)
         with open(filepath, "r") as f:
-            self.text_edit.insert("1.0", f.read())
-        self.root.title(f"Open file: {filepath}")
+            self.text_widget.insert("1.0", f.read())
 
     def to_pdf(self):
-        text = self.text_edit.get("1.0", tk.END)
+        text = self.text_widget.get("1.0", tk.END)
         pdf = create_pdf_base()
         tmp_file = create_song_pdf(pdf, [get_song_from_string(text),])
         merge_pdf_files(SONGS_FILENAME, tmp_file, SONGS_FILENAME)
@@ -87,7 +102,7 @@ class ChordEditor:
         merge_pdf_files(SONGS_FILENAME, tmp_file, SONGS_FILENAME)
         self.root.after(500, self.show_non_blocking_message)
 
-    def show_non_blocking_message(self, msg: str = "Success!", duration: int = 2000) -> None:
+    def show_non_blocking_message(self, msg: str = "Success!", duration: int = 2000):
         # Create a popup window
         popup = tk.Toplevel(self.root)
         popup.title("")
