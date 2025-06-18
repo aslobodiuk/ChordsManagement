@@ -1,8 +1,9 @@
+import re
 import tkinter as tk
 from pathlib import Path
 from tkinter.filedialog import asksaveasfilename, askopenfilename, askopenfilenames
 
-from data_transformation import create_song_pdf, get_song_from_string, get_songs_from_files
+from data_transformation import create_song_pdf, get_song_from_string, get_songs_from_files, CHORDS_PATTERN
 from pdf_utils import create_pdf_base, merge_pdf_files
 
 SONGS_FILENAME = f"{Path.home()}/Documents/songs.pdf"
@@ -47,6 +48,7 @@ class ChordEditor:
 
     def _bind_events(self):
         self.text_widget.bind("<Button-2>", self.on_text_widget_right_click)
+        self.text_widget.bind("<<Paste>>", self.on_paste)
 
     def on_text_widget_right_click(self, event):
         def create_entry():
@@ -55,11 +57,26 @@ class ChordEditor:
             entry.place(x=event.x, y=event.y - 45) # todo calculate this 45
             entry.focus_set()
             entry.bind("<Return>", lambda e: self.input_chord(e, index))
+            entry.bind("<FocusOut>", lambda e: entry.destroy())
         # Delay entry creation slightly so Text widget doesn't steal focus
         self.root.after(1, create_entry)
 
+    def on_paste(self, _):
+        # Let Tkinter finish pasting (delay using after), then highlight
+        self.text_widget.after(1, self.highlight_chords)
+
+    def highlight_chords(self):
+        self.text_widget.tag_remove("chord", "1.0", tk.END)  # Clear old tags
+        lines = self.text_widget.get("1.0", tk.END).splitlines()
+        for lineno, line in enumerate(lines, start=1):
+            for match in re.finditer(CHORDS_PATTERN, line):
+                start = f"{lineno}.{match.start()}"
+                end = f"{lineno}.{match.end()}"
+                self.text_widget.tag_add("chord", start, end)
+
     def input_chord(self, event, index):
-        self.text_widget.insert(index, f"({event.widget.get()})", "chord")
+        if event.widget.get():
+            self.text_widget.insert(index, f"({event.widget.get()})", "chord")
         event.widget.destroy()
 
     def save_file(self):
@@ -83,6 +100,7 @@ class ChordEditor:
         self.text_widget.delete("1.0", tk.END)
         with open(filepath, "r") as f:
             self.text_widget.insert("1.0", f.read())
+            self.highlight_chords()
 
     def to_pdf(self):
         text = self.text_widget.get("1.0", tk.END)

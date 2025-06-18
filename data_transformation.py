@@ -4,6 +4,8 @@ from dataclasses import dataclass
 
 from fpdf import FPDF
 
+CHORDS_PATTERN = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
+
 @dataclass
 class Line:
     line: str
@@ -23,11 +25,10 @@ def convert_raw_data_into_song(title: str, artist: str, lines: list[str]) -> Son
     :return: Song object
     """
     result_lines = list()
-    chords_pattern = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
     for line in lines:
         line = line.strip()
         chords = defaultdict(str)
-        matches = re.finditer(chords_pattern, line)
+        matches = re.finditer(CHORDS_PATTERN, line)
         sub = 0  # we need subtractor for correct chord position in final line
         for match in matches:
             chord = match.group(1)  # chord without brackets
@@ -35,7 +36,7 @@ def convert_raw_data_into_song(title: str, artist: str, lines: list[str]) -> Son
             end = match.end()
             chords[start - sub] = chord if not chords[start - sub] else f"{chords[start - sub]} {chord}"
             sub += end - start
-        line = re.sub(chords_pattern, "", line)
+        line = re.sub(CHORDS_PATTERN, "", line)
         result_lines.append(Line(line, chords))
     return Song(title, artist, result_lines)
 
