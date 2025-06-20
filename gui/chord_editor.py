@@ -4,9 +4,14 @@ from pathlib import Path
 from tkinter.filedialog import asksaveasfilename, askopenfilename, askopenfilenames
 
 from data_transformation import create_song_pdf, get_song_from_string, get_songs_from_files, CHORDS_PATTERN
-from pdf_utils import create_pdf_base, merge_pdf_files
+from utils.pdf_utils import create_pdf_base, merge_pdf_files
 
 SONGS_FILENAME = f"{Path.home()}/Documents/songs.pdf"
+
+def run_gui():
+    root = tk.Tk()
+    ChordEditor(root)
+    root.mainloop()
 
 class ChordEditor:
     def __init__(self, root):
