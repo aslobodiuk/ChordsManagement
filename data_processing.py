@@ -34,7 +34,12 @@ def convert_raw_data_into_song(title: str, artist: str, lyrics: str) -> Song:
         song.lines.append(line)
     return song
 
-def convert_songs_to_pdf(pdf: FPDF, songs: list[Song]):
+def convert_songs_to_pdf(pdf: FPDF, songs: list[Song]) -> io.BytesIO:
+    """
+    :param pdf: FPDF object
+    :param songs: list of Song objects
+    :return: stream of generated PDF file
+    """
     for song in songs:
         pdf.add_page()
         # add title
