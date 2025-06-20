@@ -1,3 +1,4 @@
+"""legacy implementation, which uses local classes, not DB"""
 import re
 from collections import defaultdict
 from dataclasses import dataclass

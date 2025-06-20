@@ -1,5 +1,6 @@
 from typing import Optional, List
 
+from pydantic import BaseModel
 from sqlmodel import SQLModel, Field, Relationship
 
 class Song(SQLModel, table=True):
@@ -40,4 +41,10 @@ class SongRead(SQLModel):
     title: str
     artist: str
     lines: List[LineRead] = []
+
+
+class SongCreate(BaseModel):
+    title: str
+    artist: str
+    lyrics: str
 
