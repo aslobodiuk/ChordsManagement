@@ -1,21 +1,23 @@
-from typing import List
+from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, select
+from sqlmodel import Session, select, or_
 
 from data_processing import convert_raw_data_into_song
 from db import get_session
-from models import Song, Line, SongRead, SongCreate
+from models import Song, Line, SongRead, SongCreate, SongShort
 
 router = APIRouter()
 
-@router.get("/")
-def read_root():
-    return {"message": "FastAPI is running!"}
-
-@router.get("/songs", response_model=List[SongRead])
-def read_songs(skip: int = 0, limit: int = 100, session: Session = Depends(get_session)):
+@router.get("/songs", response_model=Union[List[SongRead], List[SongShort]])
+def read_songs(
+        skip: int = 0,
+        limit: int = 100,
+        search: str = "",
+        short: bool = False,
+        session: Session = Depends(get_session)
+):
     statement = (
         select(Song)
         .offset(skip)
@@ -24,8 +26,17 @@ def read_songs(skip: int = 0, limit: int = 100, session: Session = Depends(get_s
             selectinload(Song.lines).selectinload(Line.chords)
         )
     )
+
+    if search:
+        statement = statement.where(
+            or_(
+                Song.title.ilike(f"%{search}%"),
+                Song.artist.ilike(f"%{search}%")
+            )
+        )
+
     songs = session.exec(statement).all()
-    return songs
+    return [SongShort.model_validate(song) if short else SongRead.model_validate(song) for song in songs]
 
 @router.get("/songs/{song_id}", response_model=SongRead)
 def read_song(song_id: int, session: Session = Depends(get_session)):

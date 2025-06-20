@@ -8,3 +8,4 @@ sqlmodel~=0.0.24
 fastapi~=0.115.13
 SQLAlchemy~=2.0.41
 uvicorn~=0.34.3
+pydantic~=2.11.7

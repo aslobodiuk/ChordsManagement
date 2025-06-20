@@ -31,16 +31,24 @@ class ChordRead(SQLModel):
     position: int
     chord: str
 
+
 class LineRead(SQLModel):
     id: int
     line: str
     chords: List[ChordRead] = []
+
 
 class SongRead(SQLModel):
     id: int
     title: str
     artist: str
     lines: List[LineRead] = []
+
+
+class SongShort(SQLModel):
+    id: int
+    title: str
+    artist: str
 
 
 class SongCreate(BaseModel):

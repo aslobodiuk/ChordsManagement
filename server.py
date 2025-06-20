@@ -3,7 +3,7 @@ from fastapi import FastAPI
 
 from api.routes import router
 
-app = FastAPI()
+app = FastAPI(title="Chord Editor API")
 app.include_router(router)
 
 # Function to run the FastAPI server
