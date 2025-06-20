@@ -1,12 +1,14 @@
 from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, or_
 
-from data_processing import convert_raw_data_into_song
+from data_processing import convert_raw_data_into_song, convert_songs_to_pdf
 from db import get_session
-from models import Song, Line, SongRead, SongCreate, SongShort
+from models import Song, Line, SongRead, SongCreate, SongShort, SongIdsRequest
+from utils.pdf_utils import create_pdf_base
 
 router = APIRouter()
 
@@ -52,3 +54,21 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
     session.commit()
     session.refresh(song)
     return song
+
+@router.post("/songs/to_pdf")
+def export_to_pdf(request: SongIdsRequest, session: Session = Depends(get_session)):
+    statement = select(Song)
+    if request.song_ids:
+        statement = statement.where(Song.id.in_(request.song_ids)) # todo proces all option correctly
+    songs = session.exec(statement).all()
+    if not songs:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    pdf = create_pdf_base()
+    pdf_bytes = convert_songs_to_pdf(pdf, songs)
+
+    return StreamingResponse(
+        pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "inline; filename=streamed.pdf"}
+    )

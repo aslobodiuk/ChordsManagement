@@ -56,3 +56,6 @@ class SongCreate(BaseModel):
     artist: str
     lyrics: str
 
+
+class SongIdsRequest(BaseModel):
+    song_ids: List[int]
