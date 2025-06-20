@@ -82,7 +82,7 @@ class ChordEditor:
     def input_chord(self, event, index):
         if event.widget.get():
             if re.fullmatch(CHORDS_PATTERN, f"({event.widget.get()})") is None:
-                self.root.after(500, lambda: self.show_non_blocking_message(type='error', msg="Wrong input"))
+                self.root.after(500, lambda: self.show_non_blocking_message(msg_type='error', msg="Wrong input"))
             else:
                 self.text_widget.insert(index, f"({event.widget.get()})", "chord")
         event.widget.destroy()
@@ -128,7 +128,7 @@ class ChordEditor:
         merge_pdf_files(SONGS_FILENAME, tmp_file, SONGS_FILENAME)
         self.root.after(500, self.show_non_blocking_message)
 
-    def show_non_blocking_message(self, type: str = 'success', msg: str = "Success", duration: int = 2000):
+    def show_non_blocking_message(self, msg_type: str = 'success', msg: str = "Success", duration: int = 2000):
         style = {
             'success': ('#dff0d8', '#3c763d'),
             'error': ('#f2dede', '#a94442')
@@ -155,7 +155,7 @@ class ChordEditor:
         popup.geometry(f"+{x}+{y}")
 
         # Add message label
-        label = tk.Label(popup, text=msg, font=("Arial", 11), bg=style[type][0], fg=style[type][1], relief="solid", bd=1)
+        label = tk.Label(popup, text=msg, font=("Arial", 11), bg=style[msg_type][0], fg=style[msg_type][1], relief="solid", bd=1)
         label.pack(expand=True, fill="both", padx=10, pady=10)
 
         # Auto-destroy after duration (e.g., 2000 ms)

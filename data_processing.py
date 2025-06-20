@@ -3,6 +3,7 @@ import re
 from collections import defaultdict
 
 from fpdf import FPDF
+from sqlalchemy import Sequence
 
 from models import Song, Line, Chord
 
@@ -34,7 +35,7 @@ def convert_raw_data_into_song(title: str, artist: str, lyrics: str) -> Song:
         song.lines.append(line)
     return song
 
-def convert_songs_to_pdf(pdf: FPDF, songs: list[Song]) -> io.BytesIO:
+def convert_songs_to_pdf(pdf: FPDF, songs: Sequence[Song]) -> io.BytesIO:
     """
     :param pdf: FPDF object
     :param songs: list of Song objects

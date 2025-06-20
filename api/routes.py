@@ -157,7 +157,7 @@ def export_to_pdf(request: SongIdsRequest, session: Session = Depends(get_sessio
     """
     statement = select(Song)
     if request.song_ids:
-        statement = statement.where(Song.id.in_(request.song_ids)) # todo proces all option correctly
+        statement = statement.where(Song.id.in_(request.song_ids)) # todo proces "all" option correctly
     songs = session.exec(statement).all()
     if not songs:
         raise HTTPException(status_code=404, detail="Song not found")
