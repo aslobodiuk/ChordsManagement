@@ -1,20 +1,28 @@
+from enum import Enum
 from typing import List, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, or_
 
 from data_processing import convert_raw_data_into_song, convert_songs_to_pdf
 from db import get_session
-from models import Song, Line, SongRead, SongCreate, SongShort, SongIdsRequest
+from models.db_models import Song, Line
+from models.schemas import SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay
 from utils.pdf_utils import create_pdf_base
+
+class SongDisplayMode(str, Enum):
+    short = "short"
+    full = "full"
+    for_edit = "for_edit"
+    for_display = "for_display"
 
 router = APIRouter(tags=["Songs"])
 
 @router.get(
     path="/songs",
-    response_model=Union[List[SongRead], List[SongShort]],
+    response_model=Union[List[SongRead], List[SongReadShort]],
     summary="List of songs"
 )
 def read_songs(
@@ -43,7 +51,7 @@ def read_songs(
 
         Returns
         -------
-        `Union[List[SongRead], List[SongShort]]`
+        `Union[List[SongRead], List[SongReadShort]]`
             List of songs matching the query. Full or short schema depending on `short` flag.
     """
     statement = (
@@ -64,14 +72,18 @@ def read_songs(
         )
 
     songs = session.exec(statement).all()
-    return [SongShort.model_validate(song) if short else SongRead.model_validate(song) for song in songs]
+    return [SongReadShort.model_validate(song) if short else SongRead.model_validate(song) for song in songs]
 
 @router.get(
     path="/songs/{song_id}",
-    response_model=SongRead,
+    response_model=Union[SongRead, SongReadShort, SongReadForDisplay, SongReadForEdit],
     summary="Song details"
 )
-def read_song(song_id: int, session: Session = Depends(get_session)):
+def read_song(
+        song_id: int,
+        display: SongDisplayMode = Query(default=SongDisplayMode.full),
+        session: Session = Depends(get_session)
+):
     """
         Retrieve a single song by its ID.
 
@@ -79,6 +91,8 @@ def read_song(song_id: int, session: Session = Depends(get_session)):
         ----------
         `song_id` : `int`
             Unique identifier of the song to retrieve.\n
+        `display` : `SongDisplayMode`, `optional`
+            Controls which fields are included in the response.\n
         `session` : `Session`
             Database session dependency.
 
@@ -95,7 +109,18 @@ def read_song(song_id: int, session: Session = Depends(get_session)):
     song = session.get(Song, song_id)
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
-    return song
+    if display == SongDisplayMode.short:
+        return SongReadShort.model_validate(song)
+    elif display == SongDisplayMode.for_edit:
+        song_out = SongReadForEdit.model_validate(song)
+        song_out._lines = song.lines  # manually assign hidden data
+        return song_out
+    elif display == SongDisplayMode.for_display:
+        song_out = SongReadForDisplay.model_validate(song)
+        song_out._lines = song.lines  # manually assign hidden data
+        return song_out
+    else:
+        return SongRead.model_validate(song)
 
 @router.post(
     path="/songs",

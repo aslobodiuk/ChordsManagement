@@ -5,7 +5,7 @@ from collections import defaultdict
 from fpdf import FPDF
 from sqlalchemy import Sequence
 
-from models import Song, Line, Chord
+from models.db_models import Song, Line, Chord
 
 CHORDS_PATTERN = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
 
@@ -34,6 +34,36 @@ def convert_raw_data_into_song(title: str, artist: str, lyrics: str) -> Song:
             line.chords.append(Chord(position=position, chord=chord, line=line))
         song.lines.append(line)
     return song
+
+def convert_song_into_raw_data(lines: list[Line]) -> str:
+    """
+    :param lines: list of Line objects
+    :return: song lyrics with chords in brackets
+    """
+    result = ""
+    for line in lines:
+        add = 0 # we need to add length of already used chords to keep correct chord position
+        for chord in line.chords:
+            line.line = f"{line.line[:chord.position + add]}({chord.chord}){line.line[chord.position + add:]}"
+            add += len(chord.chord) + 2 # for ( and ) symbols
+        result += line.line + '\n'
+    return result
+
+def convert_song_into_formatted_data(lines: list[Line]) -> str:
+    """
+    :param lines: list of Line objects
+    :return: formatted song lyrics with chords above words (suitable for monoscopic fonts)
+    """
+    result = ""
+    for line in lines:
+        chords_line = ''
+        for chord in line.chords:
+            blanks = ' ' * (chord.position - len(chords_line))
+            chords_line += blanks + chord.chord
+        result += chords_line + '\n'
+        result += line.line + '\n'
+
+    return result
 
 def convert_songs_to_pdf(pdf: FPDF, songs: Sequence[Song]) -> io.BytesIO:
     """
