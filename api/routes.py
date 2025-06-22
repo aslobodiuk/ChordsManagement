@@ -18,6 +18,13 @@ class SongDisplayMode(str, Enum):
     for_edit = "for_edit"
     for_display = "for_display"
 
+DISPLAY_MODES = {
+    SongDisplayMode.short: SongReadShort,
+    SongDisplayMode.full: SongRead,
+    SongDisplayMode.for_edit: SongReadForEdit,
+    SongDisplayMode.for_display: SongReadForDisplay,
+}
+
 router = APIRouter(tags=["Songs"])
 
 @router.get(
@@ -71,24 +78,16 @@ def read_songs(
         )
 
     songs = session.exec(statement).all()
-    if display == SongDisplayMode.short:
-        return [SongReadShort.model_validate(song) for song in songs]
-    elif display == SongDisplayMode.for_edit:
-        songs_out: List[SongReadForEdit] = []
+    display_mode = DISPLAY_MODES[display]
+    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
+        songs_out: List[display_mode] = []
         for song in songs:
-            song_out = SongReadForEdit.model_validate(song)
+            song_out = display_mode.model_validate(song)
             song_out._lines = song.lines  # manually assign hidden data
             songs_out.append(song_out)
         return songs_out
-    elif display == SongDisplayMode.for_display:
-        songs_out: List[SongReadForDisplay] = []
-        for song in songs:
-            song_out = SongReadForDisplay.model_validate(song)
-            song_out._lines = song.lines  # manually assign hidden data
-            songs_out.append(song_out)
-        return songs_out
-    else:
-        return [SongRead.model_validate(song) for song in songs]
+
+    return [display_mode.model_validate(song) for song in songs]
 
 @router.get(
     path="/songs/{song_id}",
@@ -125,18 +124,14 @@ def read_song(
     song = session.get(Song, song_id)
     if not song:
         raise HTTPException(status_code=404, detail="Song not found")
-    if display == SongDisplayMode.short:
-        return SongReadShort.model_validate(song)
-    elif display == SongDisplayMode.for_edit:
-        song_out = SongReadForEdit.model_validate(song)
-        song_out._lines = song.lines  # manually assign hidden data
-        return song_out
-    elif display == SongDisplayMode.for_display:
-        song_out = SongReadForDisplay.model_validate(song)
-        song_out._lines = song.lines  # manually assign hidden data
-        return song_out
-    else:
-        return SongRead.model_validate(song)
+
+    display_mode = DISPLAY_MODES[display]
+    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
+        songs_out = display_mode.model_validate(song)
+        songs_out._lines = song.lines # manually assign hidden data
+        return songs_out
+
+    return display_mode.model_validate(song)
 
 @router.post(
     path="/songs",
