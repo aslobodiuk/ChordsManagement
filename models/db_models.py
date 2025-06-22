@@ -12,7 +12,7 @@ class Song(SQLModel, table=True):
 
 class Line(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    line: str
+    text: str
     chords: list["Chord"] = Relationship(back_populates="line")
     song_id: int = Field(default=None, foreign_key="song.id")
     song: Song = Relationship(back_populates="lines")
@@ -21,6 +21,6 @@ class Line(SQLModel, table=True):
 class Chord(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     position: int
-    chord: str
+    name: str
     line_id: int = Field(default=None, foreign_key="line.id")
     line: Line = Relationship(back_populates="chords")

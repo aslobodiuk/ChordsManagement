@@ -74,14 +74,14 @@ def read_songs(
     if display == SongDisplayMode.short:
         return [SongReadShort.model_validate(song) for song in songs]
     elif display == SongDisplayMode.for_edit:
-        songs_out: List[Song] = []
+        songs_out: List[SongReadForEdit] = []
         for song in songs:
             song_out = SongReadForEdit.model_validate(song)
             song_out._lines = song.lines  # manually assign hidden data
             songs_out.append(song_out)
         return songs_out
     elif display == SongDisplayMode.for_display:
-        songs_out: List[Song] = []
+        songs_out: List[SongReadForDisplay] = []
         for song in songs:
             song_out = SongReadForDisplay.model_validate(song)
             song_out._lines = song.lines  # manually assign hidden data

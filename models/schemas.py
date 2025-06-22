@@ -10,12 +10,12 @@ from models.db_models import Line
 class ChordRead(SQLModel):
     id: int
     position: int
-    chord: str
+    name: str
 
 
 class LineRead(SQLModel):
     id: int
-    line: str
+    text: str
     chords: List[ChordRead] = []
 
 

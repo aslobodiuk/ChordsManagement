@@ -19,9 +19,9 @@ def convert_raw_data_into_song(title: str, artist: str, lyrics: str) -> Song:
     song = Song(title=title, artist=artist)
     lines = lyrics.splitlines()
     for line in lines:
-        line = Line(line=line.strip(), song=song)
+        line = Line(text=line.strip(), song=song)
         chords = defaultdict(str)
-        matches = re.finditer(CHORDS_PATTERN, line.line)
+        matches = re.finditer(CHORDS_PATTERN, line.text)
         sub = 0  # we need subtractor for correct chord position in final line
         for match in matches:
             chord = match.group(1)  # chord without brackets
@@ -29,9 +29,9 @@ def convert_raw_data_into_song(title: str, artist: str, lyrics: str) -> Song:
             end = match.end()
             chords[start - sub] = chord if not chords[start - sub] else f"{chords[start - sub]} {chord}"
             sub += end - start
-        line.line = re.sub(CHORDS_PATTERN, "", line.line)
-        for position, chord in chords.items():
-            line.chords.append(Chord(position=position, chord=chord, line=line))
+        line.text = re.sub(CHORDS_PATTERN, "", line.text)
+        for position, name in chords.items():
+            line.chords.append(Chord(position=position, name=name, line=line))
         song.lines.append(line)
     return song
 
@@ -44,9 +44,9 @@ def convert_song_into_raw_data(lines: list[Line]) -> str:
     for line in lines:
         add = 0 # we need to add length of already used chords to keep correct chord position
         for chord in line.chords:
-            line.line = f"{line.line[:chord.position + add]}({chord.chord}){line.line[chord.position + add:]}"
-            add += len(chord.chord) + 2 # for ( and ) symbols
-        result += line.line + '\n'
+            line.text = f"{line.text[:chord.position + add]}({chord.name}){line.text[chord.position + add:]}"
+            add += len(chord.name) + 2 # for ( and ) symbols
+        result += line.text + '\n'
     return result
 
 def convert_song_into_formatted_data(lines: list[Line]) -> str:
@@ -59,9 +59,9 @@ def convert_song_into_formatted_data(lines: list[Line]) -> str:
         chords_line = ''
         for chord in line.chords:
             blanks = ' ' * (chord.position - len(chords_line))
-            chords_line += blanks + chord.chord
+            chords_line += blanks + chord.name
         result += chords_line + '\n'
-        result += line.line + '\n'
+        result += line.text + '\n'
 
     return result
 
@@ -91,20 +91,20 @@ def convert_songs_to_pdf(pdf: FPDF, songs: Sequence[Song]) -> io.BytesIO:
                 blanks = ' ' * (chord.position - len(chords_line))
                 if not blanks and chords_line:
                     blanks = ' '
-                chords_line += blanks + chord.chord
+                chords_line += blanks + chord.name
 
-            if not song.lines[i].line and not chords_line: # empty line
+            if not song.lines[i].text and not chords_line: # empty line
                 pdf.cell(w=0, h=2 * cell_height, new_x="LMARGIN", new_y="NEXT")
             else:
                 pdf.cell(w=0, h=cell_height, text=chords_line, new_x="LMARGIN", new_y="NEXT")
                 end_of_pure_chords_block = (
                         chords_line and
-                        not song.lines[i].line and
+                        not song.lines[i].text and
                         i < len(song.lines) - 1 and
-                        song.lines[i + 1].line
+                        song.lines[i + 1].text
                 )
-                if song.lines[i].line or end_of_pure_chords_block:
-                    pdf.cell(w=0, h=cell_height, text=song.lines[i].line, new_x="LMARGIN", new_y="NEXT")
+                if song.lines[i].text or end_of_pure_chords_block:
+                    pdf.cell(w=0, h=cell_height, text=song.lines[i].text, new_x="LMARGIN", new_y="NEXT")
 
     pdf_bytes = io.BytesIO()
     pdf.output(pdf_bytes)
