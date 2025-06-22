@@ -22,14 +22,14 @@ router = APIRouter(tags=["Songs"])
 
 @router.get(
     path="/songs",
-    response_model=Union[List[SongRead], List[SongReadShort]],
+    response_model=Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]],
     summary="List of songs"
 )
 def read_songs(
         skip: int = 0,
         limit: int = 100,
         search: str = "",
-        short: bool = False,
+        display: SongDisplayMode = Query(default=SongDisplayMode.full),
         session: Session = Depends(get_session)
 ):
     """
@@ -43,16 +43,15 @@ def read_songs(
             Maximum number of records to return (default is 100).\n
         `search`: `str`, `optional`
             Search string to filter songs by title or artist (case-insensitive).\n
-        `short`: `bool`, `optional`
-            If `True`, returns a shortened version of each song with only id, title, and artist.
-            If `False`, returns full song details including lines and chords.\n
+        `display` : `SongDisplayMode`, `optional`
+            Controls which fields are included in the response.\n
         `session`: `Session`
             Database session dependency.
 
         Returns
         -------
-        `Union[List[SongRead], List[SongReadShort]]`
-            List of songs matching the query. Full or short schema depending on `short` flag.
+        `Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]`
+            List of songs matching the query.
     """
     statement = (
         select(Song)
@@ -72,7 +71,24 @@ def read_songs(
         )
 
     songs = session.exec(statement).all()
-    return [SongReadShort.model_validate(song) if short else SongRead.model_validate(song) for song in songs]
+    if display == SongDisplayMode.short:
+        return [SongReadShort.model_validate(song) for song in songs]
+    elif display == SongDisplayMode.for_edit:
+        songs_out: List[Song] = []
+        for song in songs:
+            song_out = SongReadForEdit.model_validate(song)
+            song_out._lines = song.lines  # manually assign hidden data
+            songs_out.append(song_out)
+        return songs_out
+    elif display == SongDisplayMode.for_display:
+        songs_out: List[Song] = []
+        for song in songs:
+            song_out = SongReadForDisplay.model_validate(song)
+            song_out._lines = song.lines  # manually assign hidden data
+            songs_out.append(song_out)
+        return songs_out
+    else:
+        return [SongRead.model_validate(song) for song in songs]
 
 @router.get(
     path="/songs/{song_id}",
@@ -98,7 +114,7 @@ def read_song(
 
         Returns
         -------
-        `SongRead`
+        `Union[SongRead, SongReadShort, SongReadForDisplay, SongReadForEdit]`
             The song data including all lines and chords.
 
         Raises
