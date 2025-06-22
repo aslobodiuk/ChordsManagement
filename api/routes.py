@@ -170,6 +170,38 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
     session.refresh(song)
     return song
 
+@router.delete("/songs/{song_id}", response_model=SongRead)
+def delete_song(song_id: int, session: Session = Depends(get_session)):
+    """
+        Delete a song by its ID.
+
+        Removes the specified song from the database and returns its data.
+
+        Parameters
+        ----------
+        `song_id` : int
+            The unique identifier of the song to delete.\n
+        `session` : `Session`
+            Database session dependency.
+
+        Returns
+        -------
+        `SongRead`
+            The deleted song's data.
+
+        Raises
+        ------
+        `HTTPException`
+            If the song with the given ID does not exist (HTTP 404).
+    """
+    song = session.get(Song, song_id)
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    session.delete(song)
+    session.commit()
+    return song
+
 @router.post(
     path="/songs/to_pdf",
     response_model=None,

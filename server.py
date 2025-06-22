@@ -1,11 +1,16 @@
+import os
+
 import uvicorn
 from fastapi import FastAPI
 
 from api.routes import router
+
+HOST = os.getenv("HOST")
+PORT = int(os.getenv("PORT", 8000))
 
 app = FastAPI(title="Chord Editor API")
 app.include_router(router)
 
 # Function to run the FastAPI server
 def run_server():
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    uvicorn.run(app, host=HOST, port=PORT)
