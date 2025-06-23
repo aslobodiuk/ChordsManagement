@@ -9,8 +9,9 @@ from sqlmodel import Session, select, or_
 from data_processing import convert_songs_to_pdf, convert_lyrics_into_song_attrs
 from db import get_session
 from models.db_models import Song, Line
-from models.schemas import SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, \
-    SongUpdate
+from models.schemas import (
+    SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
+)
 from utils.pdf_utils import create_pdf_base
 
 class SongDisplayMode(str, Enum):
@@ -205,6 +206,7 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
     update_data = song_data.model_dump(exclude_unset=True)
 
     if "lyrics" in update_data:
+        # delete all lines and chords from song and replace them with newly created
         for line in list(song.lines):
             session.delete(line)
         song.lines.clear()
