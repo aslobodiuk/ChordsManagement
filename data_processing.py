@@ -9,8 +9,10 @@ from models.db_models import Song, Line, Chord
 
 CHORDS_PATTERN = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
 
-def convert_lyrics_into_song_attrs(lyrics: str, title: str = None, artist: str = None, song: Song = None) -> Song:
+def convert_lyrics_into_song_lines(lyrics: str, title: str = None, artist: str = None, song: Song = None) -> Song:
     """
+    Parse lyrics with chords and convert them into a structured `Song` object
+    with nested `Line` and `Chord` instances.
     :param lyrics: song lyrics with chords in brackets
     :param title: song title [optional]
     :param artist: song artist [optional]
@@ -37,8 +39,10 @@ def convert_lyrics_into_song_attrs(lyrics: str, title: str = None, artist: str =
         song.lines.append(line)
     return song
 
-def convert_song_into_raw_data(lines: list[Line]) -> str:
+def convert_song_lines_into_raw_lyrics(lines: list[Line]) -> str:
     """
+    Convert structured `Line` and `Chord` objects back into raw lyrics
+    format with chords inside brackets.
     :param lines: list of Line objects
     :return: song lyrics with chords in brackets
     """
@@ -51,8 +55,10 @@ def convert_song_into_raw_data(lines: list[Line]) -> str:
         result += line.text + '\n'
     return result
 
-def convert_song_into_formatted_data(lines: list[Line]) -> str:
+def convert_song_lines_into_formatted_lyrics(lines: list[Line]) -> str:
     """
+    Convert structured lines into formatted lyrics with chords rendered above the words.
+    Suitable for monospaced font rendering.
     :param lines: list of Line objects
     :return: formatted song lyrics with chords above words (suitable for monoscopic fonts)
     """
@@ -69,6 +75,7 @@ def convert_song_into_formatted_data(lines: list[Line]) -> str:
 
 def convert_songs_to_pdf(pdf: FPDF, songs: Sequence[Song]) -> io.BytesIO:
     """
+    Render a list of `Song` objects into a structured PDF format using `FPDF`.
     :param pdf: FPDF object
     :param songs: list of Song objects
     :return: stream of generated PDF file

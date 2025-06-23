@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, or_
 
-from data_processing import convert_songs_to_pdf, convert_lyrics_into_song_attrs
+from data_processing import convert_songs_to_pdf, convert_lyrics_into_song_lines
 from db import get_session
 from models.db_models import Song, Line
 from models.schemas import (
@@ -161,7 +161,7 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         The raw lyrics string is parsed and converted into structured lines and chords
         before saving to the database.
     """
-    song = convert_lyrics_into_song_attrs(
+    song = convert_lyrics_into_song_lines(
         lyrics=song_in.lyrics,
         title=song_in.title,
         artist=song_in.artist
@@ -215,7 +215,7 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
             session.delete(line)
         song.lines.clear()
 
-        song = convert_lyrics_into_song_attrs(lyrics=update_data["lyrics"], song=song)
+        song = convert_lyrics_into_song_lines(lyrics=update_data["lyrics"], song=song)
 
         song.title = update_data.get("title", song.title)
         song.artist = update_data.get("artist", song.artist)

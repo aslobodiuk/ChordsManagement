@@ -3,7 +3,7 @@ from typing import List, Optional
 from pydantic import PrivateAttr, computed_field, field_serializer, BaseModel
 from sqlmodel import SQLModel
 
-from data_processing import convert_song_into_raw_data, convert_song_into_formatted_data
+from data_processing import convert_song_lines_into_raw_lyrics, convert_song_lines_into_formatted_lyrics
 from models.db_models import Line
 
 
@@ -48,7 +48,7 @@ class SongReadForEdit(SQLModel):
 
     @computed_field  # Pydantic v2
     def lyrics(self) -> str:
-        return convert_song_into_raw_data(self._lines)
+        return convert_song_lines_into_raw_lyrics(self._lines)
 
     @field_serializer("lyrics")
     def serialize_lyrics(self, lyrics: str, _info):
@@ -71,7 +71,7 @@ class SongReadForDisplay(SQLModel):
 
     @computed_field  # Pydantic v2
     def lyrics(self) -> str:
-        return convert_song_into_formatted_data(self._lines)
+        return convert_song_lines_into_formatted_lyrics(self._lines)
 
     @field_serializer("lyrics")
     def serialize_lyrics(self, lyrics: str, _info):
