@@ -32,7 +32,7 @@ router = APIRouter(tags=["Songs"])
 @router.get(
     path="/songs",
     response_model=Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]],
-    summary="List of songs"
+    summary="Song list"
 )
 def read_songs(
         skip: int = 0,
@@ -138,7 +138,7 @@ def read_song(
 @router.post(
     path="/songs",
     response_model=SongRead,
-    summary="Song creation"
+    summary="Song create"
 )
 def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
     """
@@ -171,7 +171,11 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
     session.refresh(song)
     return song
 
-@router.put("/songs/{song_id}", response_model=SongRead)
+@router.put(
+    path="/songs/{song_id}",
+    response_model=SongRead,
+    summary="Song update"
+)
 def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(get_session)):
     """
         Update an existing song with new metadata or lyrics.
@@ -228,7 +232,11 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
     session.refresh(song)
     return song
 
-@router.delete("/songs/{song_id}", response_model=SongRead)
+@router.delete(
+    path="/songs/{song_id}",
+    response_model=SongRead,
+    summary="Song delete"
+)
 def delete_song(song_id: int, session: Session = Depends(get_session)):
     """
         Delete a song by its ID.
@@ -265,14 +273,14 @@ def delete_song(song_id: int, session: Session = Depends(get_session)):
     response_model=None,
     summary="Export songs to PDF"
 )
-def export_to_pdf(request: SongIdsRequest, session: Session = Depends(get_session)):
+def export_to_pdf(request: SongIdsRequest = None, session: Session = Depends(get_session)):
     """
         Export selected songs to a PDF.
 
         Parameters
         ----------
-        `request` : `SongIdsRequest`
-            Object containing list of song IDs. If list is `empty` - returns `all` songs\n
+        `request` : `SongIdsRequest`, 'optional'
+            Object containing list of song IDs. If not provided - returns `all` songs\n
         `session` : `Session`
             Database session.
 
@@ -287,8 +295,8 @@ def export_to_pdf(request: SongIdsRequest, session: Session = Depends(get_sessio
             If no songs are found for the given IDs (`404 Not Found`).
     """
     statement = select(Song)
-    if request.song_ids:
-        statement = statement.where(Song.id.in_(request.song_ids)) # todo proces "all" option correctly
+    if request:
+        statement = statement.where(Song.id.in_(request.song_ids))
     songs = session.exec(statement).all()
     if not songs:
         raise HTTPException(status_code=404, detail="Song not found")

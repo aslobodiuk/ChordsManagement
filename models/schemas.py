@@ -91,4 +91,4 @@ class SongUpdate(BaseModel):
 
 
 class SongIdsRequest(BaseModel):
-    song_ids: List[int]
+    song_ids: Optional[List[int]]
