@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from pydantic import PrivateAttr, computed_field, field_serializer, BaseModel
 from sqlmodel import SQLModel
@@ -82,6 +82,12 @@ class SongCreate(BaseModel):
     title: str
     artist: str
     lyrics: str
+
+
+class SongUpdate(BaseModel):
+    title: Optional[str] = None
+    artist: Optional[str] = None
+    lyrics: Optional[str] = None
 
 
 class SongIdsRequest(BaseModel):

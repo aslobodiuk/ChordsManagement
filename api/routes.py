@@ -6,10 +6,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, or_
 
-from data_processing import convert_raw_data_into_song, convert_songs_to_pdf
+from data_processing import convert_songs_to_pdf, convert_lyrics_into_song_attrs
 from db import get_session
 from models.db_models import Song, Line
-from models.schemas import SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay
+from models.schemas import SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, \
+    SongUpdate
 from utils.pdf_utils import create_pdf_base
 
 class SongDisplayMode(str, Enum):
@@ -159,8 +160,68 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         The raw lyrics string is parsed and converted into structured lines and chords
         before saving to the database.
     """
-    song = convert_raw_data_into_song(song_in.title, song_in.artist, song_in.lyrics)
+    song = convert_lyrics_into_song_attrs(
+        lyrics=song_in.lyrics,
+        title=song_in.title,
+        artist=song_in.artist
+    )
     session.add(song)
+    session.commit()
+    session.refresh(song)
+    return song
+
+@router.put("/songs/{song_id}", response_model=SongRead)
+def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(get_session)):
+    """
+        Update an existing song with new metadata or lyrics.
+
+        This endpoint supports partial updates. If the `lyrics` field is provided, all existing lines and chords
+        are deleted and replaced with new ones derived from the updated lyrics. If only `title` or `artist` are
+        provided, they are updated without affecting the song structure.
+
+        Parameters
+        ----------
+        `song_id` : `int`
+            The ID of the song to update.\n
+        `song_data` : `SongUpdate`
+            A Pydantic model containing the fields to update. Fields not set will be ignored.\n
+        `session` : `Session`
+            Database session dependency, injected by FastAPI.
+
+        Returns
+        -------
+        `SongRead`
+            The updated song with full detail.
+
+        Raises
+        ------
+        `HTTPException`
+            If no song is found with the provided ID.
+        """
+    song: Song | None = session.get(Song, song_id)
+    if not song:
+        raise HTTPException(status_code=404, detail="Song not found")
+
+    update_data = song_data.model_dump(exclude_unset=True)
+
+    if "lyrics" in update_data:
+        for line in list(song.lines):
+            session.delete(line)
+        song.lines.clear()
+
+        song = convert_lyrics_into_song_attrs(lyrics=update_data["lyrics"], song=song)
+
+        song.title = update_data.get("title", song.title)
+        song.artist = update_data.get("artist", song.artist)
+
+        session.commit()
+        session.refresh(song)
+        return song
+
+    # Handle title/artist if lyrics not provided
+    for field, value in update_data.items():
+        setattr(song, field, value)
+
     session.commit()
     session.refresh(song)
     return song

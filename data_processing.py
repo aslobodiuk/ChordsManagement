@@ -9,14 +9,16 @@ from models.db_models import Song, Line, Chord
 
 CHORDS_PATTERN = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
 
-def convert_raw_data_into_song(title: str, artist: str, lyrics: str) -> Song:
+def convert_lyrics_into_song_attrs(lyrics: str, title: str = None, artist: str = None, song: Song = None) -> Song:
     """
-    :param title: song title
-    :param artist: song artist
     :param lyrics: song lyrics with chords in brackets
+    :param title: song title [optional]
+    :param artist: song artist [optional]
+    :param song: song object [optional]
     :return: Song object
     """
-    song = Song(title=title, artist=artist)
+    if not song:
+        song = Song(title=title, artist=artist)
     lines = lyrics.splitlines()
     for line in lines:
         line = Line(text=line.strip(), song=song)
