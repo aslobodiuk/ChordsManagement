@@ -21,8 +21,8 @@ def main() -> None:
 
         # Run tkinter app
         run_gui()
-
-    run_server()
+    else:
+        run_server()
 
 if __name__ == "__main__":
     main()
