@@ -1,6 +1,5 @@
 import io
 import re
-from collections import defaultdict
 
 from fpdf import FPDF
 from sqlalchemy import Sequence
