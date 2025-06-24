@@ -24,14 +24,15 @@ def convert_lyrics_into_song_lines(lyrics: str, title: str = None, artist: str =
     lines = lyrics.splitlines()
     for line in lines:
         line = Line(text=line.strip(), song=song)
-        chords = defaultdict(str)
+        chords = dict()
         matches = re.finditer(CHORDS_PATTERN, line.text)
         sub = 0  # we need subtractor for correct chord position in final line
         for match in matches:
             chord = match.group(1)  # chord without brackets
             start = match.start()
             end = match.end()
-            chords[start - sub] = chord if not chords[start - sub] else f"{chords[start - sub]} {chord}"
+            max_position = max(chords.keys()) + 1 if chords.keys() else 0
+            chords[max(max_position, start - sub)] = chord
             sub += end - start
         line.text = re.sub(CHORDS_PATTERN, "", line.text)
         for position, name in chords.items():
@@ -67,7 +68,7 @@ def convert_song_lines_into_formatted_lyrics(lines: list[Line]) -> str:
         chords_line = ''
         for chord in line.chords:
             blanks = ' ' * (chord.position - len(chords_line))
-            chords_line += blanks + chord.name
+            chords_line += blanks + chord.name + ' '
         result += chords_line + '\n'
         result += line.text + '\n'
 
