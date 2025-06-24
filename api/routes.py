@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import List, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, or_
@@ -233,40 +233,44 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
     return song
 
 @router.delete(
-    path="/songs/{song_id}",
-    response_model=SongRead,
+    path="/songs",
+    response_model=List[SongRead],
     summary="Song delete"
 )
-def delete_song(song_id: int, session: Session = Depends(get_session)):
+def delete_songs(
+    payload: SongIdsRequest = Body(...),
+    session: Session = Depends(get_session)
+):
     """
-        Delete a song by its ID.
+    Delete multiple songs by their IDs.
 
-        Removes the specified song from the database and returns its data.
+    Parameters
+    ----------
+    `payload` : `SongIdsRequest`
+        The request body containing a list of song IDs to delete.\n
+    `session` : `Session`
+        Database session dependency.
 
-        Parameters
-        ----------
-        `song_id` : int
-            The unique identifier of the song to delete.\n
-        `session` : `Session`
-            Database session dependency.
+    Returns
+    -------
+    `List[SongRead]`
+        A list of deleted songs' data.
 
-        Returns
-        -------
-        `SongRead`
-            The deleted song's data.
-
-        Raises
-        ------
-        `HTTPException`
-            If the song with the given ID does not exist (HTTP 404).
+    Raises
+    ------
+    `HTTPException`
+        If none of the specified songs are found (HTTP 404).
     """
-    song = session.get(Song, song_id)
-    if not song:
-        raise HTTPException(status_code=404, detail="Song not found")
+    songs = session.exec(select(Song).where(Song.id.in_(payload.song_ids))).all()
 
-    session.delete(song)
+    if not songs:
+        raise HTTPException(status_code=404, detail="No matching songs found")
+
+    for song in songs:
+        session.delete(song)
+
     session.commit()
-    return song
+    return songs
 
 @router.post(
     path="/songs/to_pdf",
