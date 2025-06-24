@@ -1,5 +1,6 @@
 import re
 import tkinter as tk
+import tkinter.font as tkFont
 from tkinter import ttk, filedialog, messagebox
 from pathlib import Path
 
@@ -68,7 +69,8 @@ class ChordEditor(tk.Tk):
         self.artist_entry.grid(row=1, column=0, sticky="ew", padx=(50, 0))
 
         # Lyrics text area
-        self.lyrics_text = tk.Text(editor_frame, wrap=tk.WORD)
+        self.lyrics_font = tkFont.Font(family="Courier", size=14)
+        self.lyrics_text = tk.Text(editor_frame, wrap=tk.WORD, font=self.lyrics_font)
         self.lyrics_text.grid(row=2, column=0, sticky="nsew", pady=5)
 
         self.lyrics_text.bind("<Button-2>", self.on_lyrics_right_click)
