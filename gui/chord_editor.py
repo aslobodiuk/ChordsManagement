@@ -1,15 +1,11 @@
+import requests
 import re
 import tkinter as tk
 import tkinter.font as tkFont
 from tkinter import ttk, filedialog, messagebox
-from pathlib import Path
-
-import requests
 
 from data_processing import CHORDS_PATTERN
 from server import HOST, PORT, PROTOCOL
-
-SONGS_FILENAME = f"{Path.home()}/Documents/songs.pdf"
 
 def run_gui():
     app = ChordEditor()
