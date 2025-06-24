@@ -1,4 +1,5 @@
 import threading
+import time
 
 from pydantic.v1 import BaseSettings
 
@@ -20,6 +21,7 @@ def main() -> None:
         server_thread.start()
 
         # Run tkinter app
+        time.sleep(1)
         run_gui()
     else:
         run_server()

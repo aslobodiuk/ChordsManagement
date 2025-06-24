@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from api.routes import router
 
+PROTOCOL = os.getenv("PROTOCOL")
 HOST = os.getenv("HOST")
 PORT = int(os.getenv("PORT", 8000))
 
