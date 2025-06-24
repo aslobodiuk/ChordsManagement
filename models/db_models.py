@@ -10,7 +10,10 @@ class Song(SQLModel, table=True):
     artist: str
     lines: list["Line"] = Relationship(
         back_populates="song",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "order_by": "Line.id"
+        }
     )
 
 
@@ -26,7 +29,10 @@ class Line(SQLModel, table=True):
     text: str
     chords: list["Chord"] = Relationship(
         back_populates="line",
-        sa_relationship_kwargs={"cascade": "all, delete-orphan"}
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "order_by": "Chord.id"
+        }
     )
     song_id: int = Field(..., foreign_key="song.id")
     song: Song = Relationship(back_populates="lines")

@@ -51,7 +51,7 @@ class ChordEditor(tk.Tk):
         self.song_listbox.bind("<<ListboxSelect>>", self.on_song_select)
         self.song_listbox.bind("<Double-Button-1>", self.on_song_double_click)
 
-        delete_button = ttk.Button(self, text="Delete selected", command=self.mock_delete)
+        delete_button = ttk.Button(self, text="Delete selected", command=self.delete_selected_songs)
         delete_button.grid(row=1, column=0, sticky="ew", padx=5, pady=(0, 5))
 
     def create_editor_section(self):
@@ -205,8 +205,30 @@ class ChordEditor(tk.Tk):
         except requests.RequestException as e:
             messagebox.showerror("Error", f"Failed to save song:\n{e}")
 
-    def mock_delete(self):
-        print("Delete clicked (mock)")
+    def delete_selected_songs(self):
+        if not self.selected_song_ids:
+            messagebox.showinfo("No selection", "Please select at least one song to delete.")
+            return
+
+        confirm = messagebox.askyesno(
+            title="Confirm Deletion",
+            message=f"Are you sure you want to delete {len(self.selected_song_ids)} song(s)?"
+        )
+        if not confirm:
+            return
+
+        try:
+            response = requests.delete(
+                f"{self.url}/songs",
+                json={"song_ids": self.selected_song_ids}
+            )
+            response.raise_for_status()
+            messagebox.showinfo("Success", "Selected songs deleted.")
+            self.refresh_song_library()
+            self.clear_editor()
+
+        except requests.RequestException as e:
+            messagebox.showerror("Error", f"Failed to delete songs:\n{e}")
 
     def clear_editor(self):
         self.title("Chord Editor: New song")
