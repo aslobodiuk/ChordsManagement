@@ -27,10 +27,10 @@ DISPLAY_MODES = {
     SongDisplayMode.for_display: SongReadForDisplay,
 }
 
-router = APIRouter(tags=["Songs"])
+router = APIRouter(tags=["Songs"], prefix="/songs")
 
 @router.get(
-    path="/songs",
+    path="/",
     response_model=Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]],
     summary="Song list"
 )
@@ -92,7 +92,7 @@ def read_songs(
     return [display_mode.model_validate(song) for song in songs]
 
 @router.get(
-    path="/songs/{song_id}",
+    path="/{song_id}",
     response_model=Union[SongRead, SongReadShort, SongReadForDisplay, SongReadForEdit],
     summary="Song details"
 )
@@ -136,7 +136,7 @@ def read_song(
     return display_mode.model_validate(song)
 
 @router.post(
-    path="/songs",
+    path="/",
     response_model=SongRead,
     summary="Song create"
 )
@@ -172,7 +172,7 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
     return song
 
 @router.put(
-    path="/songs/{song_id}",
+    path="/{song_id}",
     response_model=SongRead,
     summary="Song update"
 )
@@ -233,7 +233,7 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
     return song
 
 @router.delete(
-    path="/songs",
+    path="/",
     response_model=List[SongRead],
     summary="Song delete"
 )
@@ -273,7 +273,7 @@ def delete_songs(
     return songs
 
 @router.post(
-    path="/songs/to_pdf",
+    path="/to_pdf",
     response_model=None,
     summary="Export songs to PDF"
 )
