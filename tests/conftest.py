@@ -16,14 +16,15 @@ def test_engine():
     SQLModel.metadata.create_all(engine)
     return engine
 
+@pytest.fixture(autouse=True)
+def clean_tables(test_engine):
+    SQLModel.metadata.drop_all(test_engine)
+    SQLModel.metadata.create_all(test_engine)
 
 @pytest.fixture(scope="function")
 def test_session(test_engine):
     """Create a new session for each test function and seed test data"""
     with Session(test_engine) as session:
-        song = Song(title="Test Song", artist="Test Artist")
-        session.add(song)
-        session.commit()
         yield session
 
 
