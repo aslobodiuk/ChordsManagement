@@ -4,7 +4,6 @@ from sqlmodel import create_engine, SQLModel, Session
 from fastapi.testclient import TestClient
 
 from db import get_session
-from models.db_models import Song
 from server import app
 
 
