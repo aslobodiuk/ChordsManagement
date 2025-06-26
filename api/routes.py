@@ -1,31 +1,19 @@
-from enum import Enum
 from typing import List, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import selectinload
-from sqlmodel import Session, select, or_
+from sqlmodel import Session
 
-from data_processing import convert_songs_to_pdf, convert_lyrics_into_song_lines
+from data_processing import convert_songs_to_pdf
 from db import get_session
-from models.db_models import Song, Line
+from models.operations import (
+    db_create_song, db_read_song, NotFoundError, db_read_songs, SongDisplayMode,
+    db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
+)
 from models.schemas import (
     SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
 )
 from utils.pdf_utils import create_pdf_base
-
-class SongDisplayMode(str, Enum):
-    short = "short"
-    full = "full"
-    for_edit = "for_edit"
-    for_display = "for_display"
-
-DISPLAY_MODES = {
-    SongDisplayMode.short: SongReadShort,
-    SongDisplayMode.full: SongRead,
-    SongDisplayMode.for_edit: SongReadForEdit,
-    SongDisplayMode.for_display: SongReadForDisplay,
-}
 
 router = APIRouter(tags=["Songs"], prefix="/songs")
 
@@ -62,34 +50,7 @@ def read_songs(
         `Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]`
             List of songs matching the query.
     """
-    statement = (
-        select(Song)
-        .offset(skip)
-        .limit(limit)
-        .options(
-            selectinload(Song.lines).selectinload(Line.chords)
-        )
-    )
-
-    if search:
-        statement = statement.where(
-            or_(
-                Song.title.ilike(f"%{search}%"),
-                Song.artist.ilike(f"%{search}%")
-            )
-        )
-
-    songs = session.exec(statement).all()
-    display_mode = DISPLAY_MODES[display]
-    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
-        songs_out: List[display_mode] = []
-        for song in songs:
-            song_out = display_mode.model_validate(song)
-            song_out._lines = song.lines  # manually assign hidden data
-            songs_out.append(song_out)
-        return songs_out
-
-    return [display_mode.model_validate(song) for song in songs]
+    return db_read_songs(skip=skip, limit=limit, search=search, display=display, session=session)
 
 @router.get(
     path="/{song_id}",
@@ -123,17 +84,10 @@ def read_song(
         `HTTPException`
             If no song with the given ID is found (`404 Not Found`).
     """
-    song = session.get(Song, song_id)
-    if not song:
+    try:
+        return db_read_song(song_id, session, display)
+    except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
-
-    display_mode = DISPLAY_MODES[display]
-    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
-        songs_out = display_mode.model_validate(song)
-        songs_out._lines = song.lines # manually assign hidden data
-        return songs_out
-
-    return display_mode.model_validate(song)
 
 @router.post(
     path="/",
@@ -161,15 +115,7 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         The raw lyrics string is parsed and converted into structured lines and chords
         before saving to the database.
     """
-    song = convert_lyrics_into_song_lines(
-        lyrics=song_in.lyrics,
-        title=song_in.title,
-        artist=song_in.artist
-    )
-    session.add(song)
-    session.commit()
-    session.refresh(song)
-    return song
+    return db_create_song(song_in, session)
 
 @router.put(
     path="/{song_id}",
@@ -203,34 +149,10 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
         `HTTPException`
             If no song is found with the provided ID.
         """
-    song: Song | None = session.get(Song, song_id)
-    if not song:
+    try:
+        return db_edit_song(song_id, song_data, session)
+    except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
-
-    update_data = song_data.model_dump(exclude_unset=True)
-
-    if "lyrics" in update_data:
-        # delete all lines and chords from song and replace them with newly created
-        for line in list(song.lines):
-            session.delete(line)
-        song.lines.clear()
-
-        song = convert_lyrics_into_song_lines(lyrics=update_data["lyrics"], song=song)
-
-        song.title = update_data.get("title", song.title)
-        song.artist = update_data.get("artist", song.artist)
-
-        session.commit()
-        session.refresh(song)
-        return song
-
-    # Handle title/artist if lyrics not provided
-    for field, value in update_data.items():
-        setattr(song, field, value)
-
-    session.commit()
-    session.refresh(song)
-    return song
 
 @router.delete(
     path="/",
@@ -238,7 +160,7 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
     summary="Song delete"
 )
 def delete_songs(
-    payload: SongIdsRequest = Body(...),
+    request: SongIdsRequest = Body(...),
     session: Session = Depends(get_session)
 ):
     """
@@ -246,7 +168,7 @@ def delete_songs(
 
     Parameters
     ----------
-    `payload` : `SongIdsRequest`
+    `request` : `SongIdsRequest`
         The request body containing a list of song IDs to delete.\n
     `session` : `Session`
         Database session dependency.
@@ -261,16 +183,10 @@ def delete_songs(
     `HTTPException`
         If none of the specified songs are found (HTTP 404).
     """
-    songs = session.exec(select(Song).where(Song.id.in_(payload.song_ids))).all()
-
-    if not songs:
-        raise HTTPException(status_code=404, detail="No matching songs found")
-
-    for song in songs:
-        session.delete(song)
-
-    session.commit()
-    return songs
+    try:
+        return db_delete_songs(request, session)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Song not found")
 
 @router.post(
     path="/to_pdf",
@@ -298,11 +214,9 @@ def export_to_pdf(request: SongIdsRequest = None, session: Session = Depends(get
         `HTTPException`
             If no songs are found for the given IDs (`404 Not Found`).
     """
-    statement = select(Song)
-    if request:
-        statement = statement.where(Song.id.in_(request.song_ids))
-    songs = session.exec(statement).all()
-    if not songs:
+    try:
+        songs = db_find_songs_by_id(request, session) if request else db_find_all_songs(session)
+    except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
 
     pdf = create_pdf_base()
