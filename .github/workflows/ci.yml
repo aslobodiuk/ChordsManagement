@@ -32,3 +32,6 @@ jobs:
       - name: Check that it builds
         run: |
           python -c "import server"
+
+      - name: Run Pytest
+        run: pytest
