@@ -9,6 +9,16 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from settings import settings  # this imports your app settings
+from db import engine          # reuses your SQLModel engine
+
+# override the URL
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
