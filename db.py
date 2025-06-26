@@ -3,7 +3,7 @@ from sqlmodel import create_engine, Session
 from settings import settings
 
 engine = create_engine(
-    settings.database_url,
+    settings.DATABASE_URL,
     echo=False
 )
 

@@ -10,11 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DB_USER: testuser
-      DB_PASSWORD: testpass
-      DB_HOST: localhost
-      DB_PORT: 5432
-      DB_NAME: testdb
+      DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
       PROTOCOL: http
       HOST: 127.0.0.1
       PORT: 8000
