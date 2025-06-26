@@ -9,6 +9,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    env:
+      DB_USER: testuser
+      DB_PASSWORD: testpass
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: testdb
+      PROTOCOL: http
+      HOST: 127.0.0.1
+      PORT: 8000
+
     steps:
       - name: Clone repository
         uses: actions/checkout@v3
