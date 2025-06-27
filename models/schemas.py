@@ -1,6 +1,6 @@
 from typing import List, Optional
 
-from pydantic import PrivateAttr, computed_field, field_serializer, BaseModel
+from pydantic import PrivateAttr, computed_field, field_serializer, BaseModel, field_validator
 from sqlmodel import SQLModel
 
 from data_processing import convert_song_lines_into_raw_lyrics, convert_song_lines_into_formatted_lyrics
@@ -82,6 +82,12 @@ class SongCreate(BaseModel):
     title: str
     artist: str
     lyrics: str
+
+    @field_validator("title", "artist", "lyrics")
+    def not_blank(cls, value: str, info):
+        if not value.strip():
+            raise ValueError(f"`{info.field_name}` must not be empty or blank")
+        return value
 
 
 class SongUpdate(BaseModel):
