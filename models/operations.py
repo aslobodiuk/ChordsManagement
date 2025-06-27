@@ -13,7 +13,9 @@ from models.schemas import (
 )
 
 class NotFoundError(Exception):
-    pass
+    def __init__(self, message: str):
+        self.message = message
+        super().__init__(message)
 
 class SongDisplayMode(str, Enum):
     short = "short"
@@ -34,7 +36,7 @@ def db_find_song(song_id: int, session: Session) -> Song:
     """
     song: Song | None = session.get(Song, song_id)
     if song is None:
-        raise NotFoundError()
+        raise NotFoundError(message="Song with ID {} not found".format(song_id))
     return song
 
 def db_find_songs_by_id(request: SongIdsRequest, session: Session) -> List[Song]:
@@ -44,7 +46,7 @@ def db_find_songs_by_id(request: SongIdsRequest, session: Session) -> List[Song]
     statement = select(Song).where(Song.id.in_(request.song_ids))
     songs = session.exec(statement).all()
     if not songs:
-        raise NotFoundError()
+        raise NotFoundError(message="Songs with such IDs were not found")
     return songs
 
 def db_find_all_songs(session: Session) -> List[Song]:
@@ -52,6 +54,15 @@ def db_find_all_songs(session: Session) -> List[Song]:
     Return all songs from the database (no filtering or pagination).
     """
     return session.exec(select(Song)).all()
+
+def choose_proper_display(display, song):
+    display_mode = DISPLAY_MODES[display]
+    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
+        songs_out = display_mode.model_validate(song)
+        songs_out._lines = song.lines  # manually assign hidden data
+        return songs_out
+
+    return display_mode.model_validate(song)
 
 def db_read_song(
         song_id: int,
@@ -63,13 +74,7 @@ def db_read_song(
     Supports short/full/for_edit/for_display variants.
     """
     song = db_find_song(song_id, session)
-    display_mode = DISPLAY_MODES[display]
-    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
-        songs_out = display_mode.model_validate(song)
-        songs_out._lines = song.lines  # manually assign hidden data
-        return songs_out
-
-    return display_mode.model_validate(song)
+    return choose_proper_display(display, song)
 
 def db_find_songs(skip: int, limit: int, search: str, session: Session) -> List[Song]:
     """
@@ -107,16 +112,7 @@ def db_read_songs(
     Supports short/full/for_edit/for_display formats.
     """
     songs = db_find_songs(skip, limit, search, session)
-    display_mode = DISPLAY_MODES[display]
-    if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
-        songs_out: List[display_mode] = []
-        for song in songs:
-            song_out = display_mode.model_validate(song)
-            song_out._lines = song.lines  # manually assign hidden data
-            songs_out.append(song_out)
-        return songs_out
-
-    return [display_mode.model_validate(song) for song in songs]
+    return [choose_proper_display(display, song) for song in songs]
 
 
 def db_create_song(song_in: SongCreate, session: Session) -> Song:
