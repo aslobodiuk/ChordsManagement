@@ -3,10 +3,9 @@ from pydantic import ValidationError
 
 from models.operations import (
     NotFoundError, SongDisplayMode, db_find_song, db_find_songs_by_id,
-    db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs
+    db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs, DISPLAY_MODES
 )
-from models.schemas import SongIdsRequest, SongRead, SongReadShort, SongReadForDisplay, SongReadForEdit, SongCreate, \
-    SongUpdate
+from models.schemas import SongIdsRequest, SongCreate, SongUpdate
 from tests.utils import populate_test_db
 
 
@@ -48,55 +47,54 @@ def test_db_find_all_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
     found = db_find_all_songs(session=test_session)
     assert len(found) == len(songs)
-    assert found[0].id == songs[0].id
-    assert found[1].id == songs[1].id
-    assert found[2].id == songs[2].id
+    assert [song.id for song in found] == [song.id for song in songs]
 
-def display_assertions(display: SongDisplayMode, instance, test_session):
+@pytest.mark.parametrize(
+    "display",
+    [
+        SongDisplayMode.short,
+        SongDisplayMode.full,
+        SongDisplayMode.for_edit,
+        SongDisplayMode.for_display,
+    ],
+    ids=["short", "full", "for_edit", "for_display"]
+)
+def test_db_read_song(display: SongDisplayMode, test_session):
     """This 4 tests basically test not only read song display, but read_songs display also (both use same function)"""
     songs = populate_test_db(test_session, num_songs=1)
     song = db_read_song(song_id=songs[0].id, session=test_session, display=display)
     assert song.id == songs[0].id
     assert song.title == songs[0].title
     assert song.artist == songs[0].artist
-    assert isinstance(song, instance)
-    return song, songs
-
-def test_db_read_song_short(test_session):
-    display_assertions(SongDisplayMode.short, SongReadShort, test_session)
-
-def test_db_read_song_full(test_session):
-    song, songs = display_assertions(SongDisplayMode.full, SongRead, test_session)
-    assert len(song.lines) == len(songs[0].lines)
-
-def test_db_read_song_for_edit(test_session):
-    song, _ = display_assertions(SongDisplayMode.for_edit, SongReadForEdit, test_session)
-    assert song.lyrics == "(C1)Line (C2)1 of song 1\n(C1)Line (C2)2 of song 1\n(C1)Line (C2)3 of song 1\n"
-
-def test_db_read_song_for_display(test_session):
-    song, _ = display_assertions(SongDisplayMode.for_display, SongReadForDisplay, test_session)
-    assert song.lyrics == "C1   C2 \nLine 1 of song 1\nC1   C2 \nLine 2 of song 1\nC1   C2 \nLine 3 of song 1\n"
+    assert isinstance(song, DISPLAY_MODES[display])
+    if display == SongDisplayMode.full:
+        assert len(song.lines) == len(songs[0].lines)
+    elif display == SongDisplayMode.short:
+        assert not hasattr(song, "lines")
+        assert not hasattr(song, "lyrics")
+    elif display == SongDisplayMode.for_edit:
+        assert song.lyrics == "(C1)Line (C2)1 of song 1\n(C1)Line (C2)2 of song 1\n(C1)Line (C2)3 of song 1\n"
+    elif display == SongDisplayMode.for_display:
+        assert song.lyrics == "C1   C2 \nLine 1 of song 1\nC1   C2 \nLine 2 of song 1\nC1   C2 \nLine 3 of song 1\n"
 
 def test_db_find_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
     found = db_find_songs(skip=0, limit=100, search="", session=test_session)
     assert len(found) == len(songs)
-    assert found[0].id == songs[0].id
-    assert found[1].id == songs[1].id
-    assert found[2].id == songs[2].id
+    assert [song.id for song in found] == [song.id for song in songs]
 
-def search_assertions(search, songs, test_session):
-    found = db_find_songs(skip=0, limit=100, search=search, session=test_session)
+@pytest.mark.parametrize(
+    "search",
+    [
+        pytest.param(lambda songs: songs[1].title[4:], id="search_by_title"),
+        pytest.param(lambda songs: songs[1].artist[4:], id="search_by_artist"),
+    ]
+)
+def test_db_find_songs_with_search(search, test_session):
+    songs = populate_test_db(test_session, num_songs=3)
+    found = db_find_songs(skip=0, limit=100, search=search(songs), session=test_session)
     assert len(found) == 1
     assert found[0].id == songs[1].id
-
-def test_db_find_songs_with_search_by_title(test_session):
-    songs = populate_test_db(test_session, num_songs=3)
-    search_assertions(songs[1].title[4:], songs, test_session)
-
-def test_db_find_songs_with_search_by_artist(test_session):
-    songs = populate_test_db(test_session, num_songs=3)
-    search_assertions(songs[1].artist[4:], songs, test_session)
 
 def test_db_create_song(test_session):
     song_in = SongCreate(
@@ -157,51 +155,51 @@ def test_db_edit_song_with_lyrics(test_session):
         assert line.chords[1].position == 5
         assert line.chords[1].name == "Dm"
 
-def test_db_delete_songs(test_session):
+@pytest.mark.parametrize(
+    "id_selector, expected_deleted, expected_remaining, expect_error",
+    [
+        pytest.param(
+            lambda songs: [songs[0].id, songs[1].id],
+            lambda songs: [songs[0].id, songs[1].id],
+            lambda songs: [songs[2].id, songs[3].id],
+            False,
+            id="delete_existing"
+        ),
+        pytest.param(
+            lambda songs: [songs[0].id, 999],
+            lambda songs: [songs[0].id],
+            lambda songs: [songs[1].id, songs[2].id, songs[3].id],
+            False,
+            id="partially_existing"
+        ),
+        pytest.param(
+            lambda songs: [666, 999],
+            lambda songs: [],
+            lambda songs: [song.id for song in songs],
+            True,
+            id="non_existent_ids"
+        ),
+        pytest.param(
+            lambda songs: [],
+            lambda songs: [],
+            lambda songs: [song.id for song in songs],
+            True,
+            id="empty_input"
+        ),
+    ]
+)
+def test_db_delete_songs_all_cases(id_selector, expected_deleted, expected_remaining, expect_error, test_session):
     songs = populate_test_db(test_session, num_songs=4)
-    ids_for_delete = [songs[0].id, songs[1].id]
-    ids_to_remain = [songs[2].id, songs[3].id]
-    request = SongIdsRequest(song_ids=ids_for_delete)
-    deleted_songs = db_delete_songs(request, test_session)
+    ids_for_delete = id_selector(songs)
 
-    # Assert correct songs were deleted
-    assert sorted([song.id for song in deleted_songs]) == sorted(ids_for_delete)
+    if expect_error:
+        with pytest.raises(NotFoundError) as exc_info:
+            db_delete_songs(SongIdsRequest(song_ids=ids_for_delete), test_session)
+        assert exc_info.value.message == "Songs with such IDs were not found"
+    else:
+        deleted_songs = db_delete_songs(SongIdsRequest(song_ids=ids_for_delete), test_session)
+        deleted_ids = [song.id for song in deleted_songs]
+        remaining_ids = [song.id for song in db_find_all_songs(session=test_session)]
 
-    # Assert the remaining songs are untouched
-    remaining_song_ids = [song.id for song in db_find_all_songs(session=test_session)]
-    assert sorted(remaining_song_ids) == sorted(ids_to_remain)
-
-def test_db_delete_songs_empty_input(test_session):
-    populate_test_db(test_session, num_songs=4)
-    request = SongIdsRequest(song_ids=[])
-    with pytest.raises(NotFoundError) as exc_info:
-        db_delete_songs(request, test_session)
-    assert exc_info.value.message == "Songs with such IDs were not found"
-
-def test_db_delete_songs_non_existed_ids(test_session):
-    populate_test_db(test_session, num_songs=4)
-    request = SongIdsRequest(song_ids=[666, 999])
-    with pytest.raises(NotFoundError) as exc_info:
-        db_delete_songs(request, test_session)
-    assert exc_info.value.message == "Songs with such IDs were not found"
-
-def test_db_delete_songs_partially_existed_ids(test_session):
-    """
-    Ensure that when a mix of valid and invalid song IDs are passed,
-    only the existing ones are deleted and the rest are ignored.
-    """
-    songs = populate_test_db(test_session, num_songs=4)
-    non_existed_id = 999
-    ids_for_delete = [songs[0].id, non_existed_id]
-    expected_deleted_ids = [songs[0].id]
-    expected_remaining_ids = [songs[1].id, songs[2].id, songs[3].id]
-
-    request = SongIdsRequest(song_ids=ids_for_delete)
-    deleted_songs = db_delete_songs(request, test_session)
-
-    # Assert only the valid song ID was deleted
-    assert sorted([song.id for song in deleted_songs]) == sorted(expected_deleted_ids)
-
-    # Assert remaining songs are intact
-    remaining_song_ids = [song.id for song in db_find_all_songs(session=test_session)]
-    assert sorted(remaining_song_ids) == sorted(expected_remaining_ids)
+        assert sorted(deleted_ids) == sorted(expected_deleted(songs))
+        assert sorted(remaining_ids) == sorted(expected_remaining(songs))
