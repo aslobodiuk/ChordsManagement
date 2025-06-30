@@ -1,4 +1,6 @@
 from sqlmodel import Session
+
+from elasticsearch_client import index_song
 from models.db_models import Song, Line, Chord
 
 
@@ -35,5 +37,6 @@ def populate_test_db(session: Session, num_songs: int = 1) -> list[Song]:
     session.commit()
     for song in songs:
         session.refresh(song)
+        index_song(song)
 
     return songs

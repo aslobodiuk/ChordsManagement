@@ -1,25 +1,11 @@
 from opensearchpy import OpenSearch
 
 from models.db_models import Song
-from settings import settings
+from settings import get_settings
+
+settings = get_settings()
 
 es = OpenSearch(settings.ELASTICSEARCH_URL)
-
-def create_songs_index_if_needed():
-    """
-    Create the 'songs' index in OpenSearch if it doesn't exist.
-    Can include mapping if needed.
-    """
-    if not es.indices.exists(index="songs"):
-        es.indices.create(index="songs", body={
-            "mappings": {
-                "properties": {
-                    "title": {"type": "text"},
-                    "artist": {"type": "text"},
-                    "lines": {"type": "text"}
-                }
-            }
-        })
 
 def index_song(song: Song):
     """
@@ -31,7 +17,7 @@ def index_song(song: Song):
         "artist": song.artist,
         "lines": " ".join([line.text for line in song.lines])
     }
-    es.index(index="songs", id=str(song.id), body=doc)
+    es.index(index=settings.ES_INDEX_NAME, id=str(song.id), body=doc)
 
 def search_songs(query: str, limit: int = 20):
     """
@@ -56,7 +42,7 @@ def search_songs(query: str, limit: int = 20):
         "size": limit
     }
 
-    response = es.search(index="songs", body=body)
+    response = es.search(index=settings.ES_INDEX_NAME, body=body)
 
     results = []
     for hit in response["hits"]["hits"]:

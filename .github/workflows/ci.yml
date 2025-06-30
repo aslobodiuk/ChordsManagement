@@ -10,8 +10,9 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      DATABASE_URL: postgresql://testuser:testpass@localhost:5432/testdb
-      ELASTICSEARCH_URL: http://localhost:9200
+      DATABASE_URL: "sqlite:///:memory:"
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      ES_INDEX_NAME: songs-test
 
     services:
       elasticsearch:

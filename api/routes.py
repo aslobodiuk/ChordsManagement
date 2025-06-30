@@ -14,9 +14,12 @@ from models.operations import (
 from models.schemas import (
     SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
 )
+from settings import get_settings
 from utils.pdf_utils import create_pdf_base
 
 router = APIRouter(tags=["Songs"], prefix="/songs")
+
+settings = get_settings()
 
 @router.get(
     path="/",
@@ -194,7 +197,7 @@ def delete_songs(
         songs = db_delete_songs(request, session)
         # remove from Elasticsearch
         for song in songs:
-            es.delete(index="songs", id=str(song.id), ignore=[404])
+            es.delete(index=settings.ES_INDEX_NAME, id=str(song.id), ignore=[404])
         return songs
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")

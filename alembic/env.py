@@ -13,7 +13,8 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from settings import settings  # this imports your app settings
+from settings import get_settings  # this imports your app settings
+settings = get_settings()
 from db import engine          # reuses your SQLModel engine
 
 # override the URL

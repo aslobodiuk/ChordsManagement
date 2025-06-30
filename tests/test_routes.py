@@ -1,7 +1,11 @@
 import pytest
+from opensearchpy import NotFoundError
 
+from elasticsearch_client import es
+from settings import get_settings
 from tests.utils import populate_test_db
 
+settings = get_settings()
 
 def test_read_songs(client, test_session):
     populate_test_db(test_session, num_songs=2)
@@ -42,6 +46,20 @@ def test_delete_song(client, test_session):
     response = client.get(f"/songs/{songs[1].id}")
     assert response.status_code == 404
 
+def test_delete_song_es_index(client, test_session):
+    songs = populate_test_db(test_session, num_songs=4)
+
+    client.request(
+        method="DELETE",
+        url="/songs",
+        headers={"Content-Type": "application/json"},
+        json={"song_ids": [songs[0].id, songs[1].id]}
+    )
+
+    for song_id in [songs[0].id, songs[1].id]:
+        with pytest.raises(NotFoundError):
+            es.get(index=settings.ES_INDEX_NAME, id=str(song_id))
+
 def test_update_song(client, test_session):
     songs = populate_test_db(test_session, num_songs=1)
 
@@ -51,6 +69,19 @@ def test_update_song(client, test_session):
     assert response.status_code == 200
     assert data["title"] == "New Title"
     assert data["artist"] == "New Artist"
+
+def test_update_song_es_index(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+
+    first_line, second_line = "New line 1", "New line 2"
+    payload = {"title": "New Title", "artist": "New Artist", "lyrics": f"{first_line}\n{second_line}"}
+    client.put(f"/songs/{songs[0].id}", json=payload)
+
+    es_doc = es.get(index=settings.ES_INDEX_NAME, id=str(songs[0].id))
+    assert es_doc["found"] is True
+    assert "New Title" in es_doc["_source"]["title"]
+    assert "New Artist" in es_doc["_source"]["artist"]
+    assert f"{first_line} {second_line}" in es_doc["_source"]["lines"]
 
 def test_create_song(client):
     payload = {"title": "New Title", "artist": "New Artist", "lyrics": "Lyrics"}
@@ -67,6 +98,20 @@ def test_create_song_with_improper_input(client):
     payload = {"title": "New Title", "artist": "New Artist"}
     response = client.post("/songs", json=payload)
     assert response.status_code == 422
+
+def test_create_song_es_index(client):
+    payload = {"title": "New Title", "artist": "New Artist", "lyrics": "Lyrics"}
+    response = client.post("/songs", json=payload)
+    song_id = response.json()["id"]
+    es.indices.refresh(index=settings.ES_INDEX_NAME)
+
+    # Query ES to check that song was indexed
+    es_doc = es.get(index=settings.ES_INDEX_NAME, id=str(song_id))
+    assert es_doc["found"] is True
+
+    # Check ES document contents
+    assert payload["title"] in es_doc["_source"]["title"]
+    assert payload["artist"] in es_doc["_source"]["artist"]
 
 def test_export_to_pdf(client, test_session):
     songs = populate_test_db(test_session, num_songs=2)
