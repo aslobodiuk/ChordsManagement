@@ -6,12 +6,27 @@ from sqlmodel import select
 
 from api.routes import router
 from db import get_session
-from elasticsearch_client import index_song, create_songs_index_if_needed
+from elasticsearch_client import index_song, es
 from models.db_models import Song
+from settings import get_settings
+
+settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    create_songs_index_if_needed()
+    if es.indices.exists(index=settings.ES_INDEX_NAME):
+        es.indices.delete(index=settings.ES_INDEX_NAME)
+
+    es.indices.create(index=settings.ES_INDEX_NAME, body={
+        "mappings": {
+            "properties": {
+                "title": {"type": "text"},
+                "artist": {"type": "text"},
+                "lines": {"type": "text"}
+            }
+        }
+    })
+
     session = next(get_session())
     try:
         songs = session.exec(select(Song).options(selectinload(Song.lines))).all()

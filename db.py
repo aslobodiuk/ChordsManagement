@@ -1,6 +1,8 @@
 from sqlmodel import create_engine, Session
 
-from settings import settings
+from settings import get_settings
+
+settings = get_settings()
 
 engine = create_engine(
     settings.DATABASE_URL,

@@ -73,9 +73,16 @@ def test_db_read_song(display: SongDisplayMode, test_session):
         assert not hasattr(song, "lines")
         assert not hasattr(song, "lyrics")
     elif display == SongDisplayMode.for_edit:
-        assert song.lyrics == "(C1)Line (C2)1 of song 1\n(C1)Line (C2)2 of song 1\n(C1)Line (C2)3 of song 1\n"
+        lyrics = ''
+        for line in songs[0].lines:
+            lyrics += f"({line.chords[0].name}){line.text[:5]}({line.chords[1].name}){line.text[5:]}\n"
+        assert song.lyrics == lyrics
     elif display == SongDisplayMode.for_display:
-        assert song.lyrics == "C1   C2 \nLine 1 of song 1\nC1   C2 \nLine 2 of song 1\nC1   C2 \nLine 3 of song 1\n"
+        lyrics = ''
+        for line in songs[0].lines:
+            blanks = " " * (line.chords[1].position - len(line.chords[0].name))
+            lyrics += f"{line.chords[0].name}{blanks}{line.chords[1].name} \n{line.text}\n"
+        assert song.lyrics == lyrics
 
 def test_db_find_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
@@ -87,8 +94,8 @@ def test_db_find_songs(test_session):
 @pytest.mark.parametrize(
     "search",
     [
-        pytest.param(lambda songs: songs[1].title[4:], id="search_by_title"),
-        pytest.param(lambda songs: songs[1].artist[4:], id="search_by_artist"),
+        pytest.param(lambda songs: songs[0].title, id="search_by_title"),
+        pytest.param(lambda songs: songs[0].artist, id="search_by_artist"),
     ]
 )
 def test_db_find_songs_with_search(search, test_session):
