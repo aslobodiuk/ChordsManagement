@@ -6,6 +6,7 @@ from sqlmodel import Session
 
 from data_processing import convert_songs_to_pdf
 from db import get_session
+from elasticsearch_client import index_song, es
 from models.operations import (
     db_create_song, db_read_song, NotFoundError, db_read_songs, SongDisplayMode,
     db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
@@ -115,7 +116,10 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         The raw lyrics string is parsed and converted into structured lines and chords
         before saving to the database.
     """
-    return db_create_song(song_in, session)
+    song = db_create_song(song_in, session)
+    # add to Elasticsearch
+    index_song(song)
+    return song
 
 @router.put(
     path="/{song_id}",
@@ -150,7 +154,10 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
             If no song is found with the provided ID.
         """
     try:
-        return db_edit_song(song_id, song_data, session)
+        song = db_edit_song(song_id, song_data, session)
+        # update in Elasticsearch
+        index_song(song)
+        return song
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
 
@@ -184,7 +191,11 @@ def delete_songs(
         If none of the specified songs are found (HTTP 404).
     """
     try:
-        return db_delete_songs(request, session)
+        songs = db_delete_songs(request, session)
+        # remove from Elasticsearch
+        for song in songs:
+            es.delete(index="songs", id=str(song.id), ignore=[404])
+        return songs
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
 

@@ -2,15 +2,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str
-
-    PROTOCOL: str = "http"
-    HOST: str = "127.0.0.1"
-    PORT: int = 8000
-
-    @property
-    def api_url(self) -> str:
-        return f"{self.PROTOCOL}://{self.HOST}:{self.PORT}"
+    DATABASE_URL: str = "postgresql://chordsdb_admin:Gfhfdjpbr19!@localhost:5432/chordsdb"
+    ELASTICSEARCH_URL: str = "http://localhost:9200"
 
     class Config:
         env_file = ".env"

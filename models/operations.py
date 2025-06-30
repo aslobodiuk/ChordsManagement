@@ -1,3 +1,4 @@
+from collections import defaultdict
 from enum import Enum
 from typing import List, Union
 
@@ -6,6 +7,7 @@ from sqlmodel import Session, select, or_
 from fastapi import Query
 
 from data_processing import convert_lyrics_into_song_lines
+from elasticsearch_client import search_songs
 from models.db_models import Song, Line
 from models.schemas import (
     SongCreate, SongReadShort, SongRead, SongReadForEdit,
@@ -55,14 +57,15 @@ def db_find_all_songs(session: Session) -> List[Song]:
     """
     return session.exec(select(Song)).all()
 
-def choose_proper_display(display, song):
+def choose_proper_display(display, song, highlights=None):
     display_mode = DISPLAY_MODES[display]
+    song_out = display_mode.model_validate(song)
+    if highlights:
+        song_out.highlights = highlights
     if display in [SongDisplayMode.for_edit, SongDisplayMode.for_display]:
-        songs_out = display_mode.model_validate(song)
-        songs_out._lines = song.lines  # manually assign hidden data
-        return songs_out
-
-    return display_mode.model_validate(song)
+        song_out._lines = song.lines  # manually assign hidden data
+        return song_out
+    return song_out
 
 def db_read_song(
         song_id: int,
@@ -76,29 +79,40 @@ def db_read_song(
     song = db_find_song(song_id, session)
     return choose_proper_display(display, song)
 
-def db_find_songs(skip: int, limit: int, search: str, session: Session) -> List[Song]:
+def db_find_songs(skip: int, limit: int, search: str, session: Session):
     """
     Query songs with pagination and optional search in title/artist.
     Includes preloading of lines and chords.
     """
+    if search:
+        search_result = search_songs(search, limit=limit + skip)
+        if not search_result:
+            return []
+
+        song_ids = [highlight['id'] for highlight in search_result]
+
+        # Re-order songs by ID order from ES
+        statement = (
+            select(Song)
+            .where(Song.id.in_(song_ids))
+            .options(selectinload(Song.lines).selectinload(Line.chords))
+        )
+        songs = session.exec(statement).all()
+
+        # Sort songs to match ES relevance order
+        id_to_index = {str(id): i for i, id in enumerate(song_ids)}
+        songs.sort(key=lambda s: id_to_index.get(str(s.id), 0))
+
+        return songs, search_result
+
+    # fallback for no search
     statement = (
         select(Song)
         .offset(skip)
         .limit(limit)
-        .options(
-            selectinload(Song.lines).selectinload(Line.chords)
-        )
+        .options(selectinload(Song.lines).selectinload(Line.chords))
     )
-
-    if search:
-        statement = statement.where(
-            or_(
-                Song.title.ilike(f"%{search}%"),
-                Song.artist.ilike(f"%{search}%")
-            )
-        )
-
-    return session.exec(statement).all()
+    return session.exec(statement).all(), []
 
 def db_read_songs(
     skip: int,
@@ -111,8 +125,12 @@ def db_read_songs(
     Return a list of songs in the specified display mode.
     Supports short/full/for_edit/for_display formats.
     """
-    songs = db_find_songs(skip, limit, search, session)
-    return [choose_proper_display(display, song) for song in songs]
+    songs, search_result = db_find_songs(skip, limit, search, session)
+    # if search is present - we display search highlights in the response
+    highlights = defaultdict(list)
+    for data in search_result:
+        highlights[int(data['id'])] = data['highlight']
+    return [choose_proper_display(display, song, highlights[song.id]) for song in songs]
 
 
 def db_create_song(song_in: SongCreate, session: Session) -> Song:

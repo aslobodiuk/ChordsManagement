@@ -79,7 +79,7 @@ def test_db_read_song(display: SongDisplayMode, test_session):
 
 def test_db_find_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
-    found = db_find_songs(skip=0, limit=100, search="", session=test_session)
+    found, _ = db_find_songs(skip=0, limit=100, search="", session=test_session)
     assert len(found) == len(songs)
     assert [song.id for song in found] == [song.id for song in songs]
 
@@ -92,7 +92,7 @@ def test_db_find_songs(test_session):
 )
 def test_db_find_songs_with_search(search, test_session):
     songs = populate_test_db(test_session, num_songs=3)
-    found = db_find_songs(skip=0, limit=100, search=search(songs), session=test_session)
+    found, _ = db_find_songs(skip=0, limit=100, search=search(songs), session=test_session)
     assert len(found) == 1
     assert found[0].id == songs[1].id
 
