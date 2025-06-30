@@ -6,12 +6,13 @@ from sqlmodel import select
 
 from api.routes import router
 from db import get_session
-from elasticsearch_client import index_song
+from elasticsearch_client import index_song, create_songs_index_if_needed
 from models.db_models import Song
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    create_songs_index_if_needed()
     session = next(get_session())
     try:
         songs = session.exec(select(Song).options(selectinload(Song.lines))).all()
