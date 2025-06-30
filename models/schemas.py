@@ -23,6 +23,7 @@ class SongRead(SQLModel):
     id: int
     title: str
     artist: str
+    highlights: Optional[dict[str, List[str]]] = None
     lines: List[LineRead] = []
 
 
@@ -30,12 +31,14 @@ class SongReadShort(SQLModel):
     id: int
     title: str
     artist: str
+    highlights: Optional[dict[str, List[str]]] = None
 
 
 class SongReadForEdit(SQLModel):
     id: int
     title: str
     artist: str
+    highlights: Optional[dict[str, List[str]]] = None
 
     # Hide this from API schema and response
     _lines: List[Line] = PrivateAttr()
@@ -59,6 +62,7 @@ class SongReadForDisplay(SQLModel):
     id: int
     title: str
     artist: str
+    highlights: Optional[dict[str, List[str]]] = None
 
     # Hide this from API schema and response
     _lines: List[Line] = PrivateAttr()
@@ -69,7 +73,7 @@ class SongReadForDisplay(SQLModel):
         # Manually set _lines after instantiating from db object
         self._lines = data.get("lines", [])
 
-    @computed_field  # Pydantic v2
+    @computed_field
     def lyrics(self) -> str:
         return convert_song_lines_into_formatted_lyrics(self._lines)
 
