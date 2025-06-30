@@ -87,7 +87,7 @@ def db_find_songs(skip: int, limit: int, search: str, session: Session):
     if search:
         search_result = search_songs(search, limit=limit + skip)
         if not search_result:
-            return []
+            return [], []
 
         song_ids = [highlight['id'] for highlight in search_result]
 
