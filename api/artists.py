@@ -1,11 +1,11 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlmodel import Session, select
 
 from db import get_session
 from models.db_models import Artist
-from models.operations import db_read_artists, NotFoundError, db_read_artist, db_create_artist
+from models.operations import db_read_artists, NotFoundError, db_read_artist, db_create_artist, db_delete_artist
 from models.schemas import ArtistReadWithSongs, ArtistRead, ArtistCreate
 
 router = APIRouter(tags=["Artists"], prefix="/artists")
@@ -98,3 +98,35 @@ def create_song(payload: ArtistCreate, session: Session = Depends(get_session)):
             detail=f"Artist with name '{payload.name}' already exists"
         )
     return db_create_artist(payload, session)
+
+@router.delete(
+    path="/{artist_id}",
+    response_model=None,
+    summary="Artist delete"
+)
+def delete_artist(artist_id: int, session: Session = Depends(get_session)):
+    """
+        Delete an artist by ID.
+
+        Parameters
+        ----------
+        `artist_id` : `int`
+            The ID of the artist to delete.\n
+        `session` : `Session`, `optional`
+            Database session dependency.
+
+        Returns
+        -------
+        `Response`
+            A response with HTTP 204 No Content if deletion was successful.
+
+        Raises
+        ------
+        `HTTPException` (404)
+            If no artist with the specified ID is found.
+    """
+    try:
+        db_delete_artist(artist_id, session)
+        return Response(status_code=204)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail=f"Artist with ID {artist_id} not found")

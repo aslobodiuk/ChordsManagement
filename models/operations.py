@@ -5,7 +5,7 @@ from typing import List, Union
 from sqlalchemy import Sequence
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, and_
-from fastapi import Query, HTTPException, status
+from fastapi import Query
 
 from data_processing import convert_lyrics_into_song_lines
 from elasticsearch_client import search_songs
@@ -250,4 +250,13 @@ def db_create_artist(payload: ArtistCreate, session: Session) -> Artist:
     session.add(artist)
     session.commit()
     session.refresh(artist)
+    return artist
+
+def db_delete_artist(artist_id: int, session: Session):
+    """Delete an artist by ID or raise NotFoundError if not found."""
+    artist: Artist | None = session.get(Artist, artist_id)
+    if artist is None:
+        raise NotFoundError(message="Artist with ID {} not found".format(artist_id))
+    session.delete(artist)
+    session.commit()
     return artist

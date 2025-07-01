@@ -1,6 +1,7 @@
 import pytest
 from opensearchpy import NotFoundError
 
+from api import songs
 from elasticsearch_client import es
 from settings import get_settings
 from tests.utils import populate_test_db
@@ -169,3 +170,18 @@ def test_create_artist_already_exists(client):
     response = client.post("/artists", json=payload)
     assert response.status_code == 400
     assert response.json()["detail"] == f"Artist with name '{artist_name}' already exists"
+
+def test_delete_artist(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+
+    response = client.delete(f"/artists/{songs[0].artist_id}")
+
+    assert response.status_code == 204
+    # Trying to get deleted elements
+    response = client.get(f"/artists/{songs[0].id}")
+    assert response.status_code == 404
+
+def test_delete_artist_not_found(client, test_session):
+    response = client.delete(f"/artists/999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Artist with ID 999 not found"

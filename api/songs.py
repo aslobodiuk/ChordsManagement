@@ -180,7 +180,7 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
 
 @router.delete(
     path="/",
-    response_model=List[SongRead],
+    response_model=None,
     summary="Song delete"
 )
 def delete_songs(
