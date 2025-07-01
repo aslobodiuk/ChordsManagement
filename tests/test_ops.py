@@ -65,7 +65,7 @@ def test_db_read_song(display: SongDisplayMode, test_session):
     song = db_read_song(song_id=songs[0].id, session=test_session, display=display)
     assert song.id == songs[0].id
     assert song.title == songs[0].title
-    assert song.artist == songs[0].artist
+    assert song.artist.id == songs[0].artist.id
     assert isinstance(song, DISPLAY_MODES[display])
     if display == SongDisplayMode.full:
         assert len(song.lines) == len(songs[0].lines)
@@ -94,7 +94,7 @@ def test_db_find_songs(test_session):
     "search, expected_count, expected_field_name",
     [
         pytest.param(lambda songs: songs[0].title.split()[-1], 1, "title", id="search_by_title"),
-        pytest.param(lambda songs: songs[0].artist.split()[-1], 1, "artist", id="search_by_artist"),
+        pytest.param(lambda songs: songs[0].artist.name.split()[-1], 1, "artist", id="search_by_artist"),
         pytest.param(lambda songs: songs[0].lines[0].text.split()[0], 1, "lines", id="search_by_lyrics"),
         pytest.param(lambda songs: "NotExistedString", 0, None, id="search_not_found"),
         pytest.param(lambda songs: songs[0].title.split()[-1].upper(), 1, "title", id="search_case_insensitive")
@@ -123,51 +123,53 @@ def test_db_find_songs_with_search(search, expected_count, expected_field_name, 
     assert len(found) == expected_count
 
 def test_db_create_song(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
     song_in = SongCreate(
         title="Song Title",
-        artist="Song Artist",
+        artist_id=songs[0].artist.id,
         lyrics="(Am)Song (Dm)Line 1\n(Am)Song (Dm)Line 2",
     )
     song = db_create_song(song_in, test_session)
     song_id = song.id
     created_song = db_find_song(song_id=song_id, session=test_session)
     assert created_song.title == "Song Title"
-    assert created_song.artist == "Song Artist"
+    assert created_song.artist.name == songs[0].artist.name
     assert len(created_song.lines) == 2
 
 def test_db_create_song_with_empty_data(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
     with pytest.raises(ValidationError) as exc_info:
-        SongCreate(title="", artist="", lyrics="")
+        SongCreate(title="", artist_id=songs[0].artist_id, lyrics="")
 
     errors = exc_info.value.errors()
-    assert len(errors) == 3
+    assert len(errors) == 2
 
-    expected_fields = ["title", "artist", "lyrics"]
+    expected_fields = ["title", "lyrics"]
     for field in expected_fields:
         assert any(
             e["loc"] == (field,) and f"`{field}` must not be empty or blank" in e["msg"] for e in errors
         )
 
 def test_db_edit_song_with_no_lyrics(test_session):
-    songs = populate_test_db(test_session, num_songs=1)
-    song_data = SongUpdate(title="New title", artist="New artist")
+    songs = populate_test_db(test_session, num_songs=2)
+    song_data = SongUpdate(title="New title", artist_id=songs[1].artist_id)
     db_edit_song(song_id=songs[0].id, song_data=song_data, session=test_session)
 
     created_song = db_find_song(song_id=songs[0].id, session=test_session)
     assert created_song.title == "New title"
-    assert created_song.artist == "New artist"
+    assert created_song.artist.name == songs[1].artist.name
     # Assert lyrics (lines) stayed the same
     assert [line.text for line in created_song.lines] == [line.text for line in songs[0].lines]
 
 def test_db_edit_song_with_lyrics(test_session):
-    songs = populate_test_db(test_session, num_songs=1)
-    song_data = SongUpdate(title="New title", artist="New artist", lyrics="(Am)Song (Dm)Line 1\n(Am)Song (Dm)Line 2")
+    songs = populate_test_db(test_session, num_songs=2)
+    song_data = SongUpdate(title="New title", artist_id=songs[1].artist_id, lyrics="(Am)Song (Dm)Line 1\n(Am)Song (Dm)Line 2")
     db_edit_song(song_id=songs[0].id, song_data=song_data, session=test_session)
 
     created_song = db_find_song(song_id=songs[0].id, session=test_session)
 
     assert created_song.title == "New title"
-    assert created_song.artist == "New artist"
+    assert created_song.artist.name == songs[1].artist.name
 
     # Assert lyrics were updated correctly
     expected_lines = ["Song Line 1", "Song Line 2"]
@@ -221,7 +223,7 @@ def test_db_delete_songs_all_cases(id_selector, expected_deleted, expected_remai
     if expect_error:
         with pytest.raises(NotFoundError) as exc_info:
             db_delete_songs(SongIdsRequest(song_ids=ids_for_delete), test_session)
-        assert exc_info.value.message == "Songs with such IDs were not found"
+            assert exc_info.value.message == "Songs with such IDs were not found"
     else:
         deleted_songs = db_delete_songs(SongIdsRequest(song_ids=ids_for_delete), test_session)
         deleted_ids = [song.id for song in deleted_songs]

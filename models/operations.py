@@ -173,7 +173,7 @@ def db_create_song(song_in: SongCreate, session: Session) -> Song:
     song = convert_lyrics_into_song_lines(
         lyrics=song_in.lyrics,
         title=song_in.title,
-        artist=song_in.artist
+        artist_id=song_in.artist_id
     )
     session.add(song)
     session.commit()
@@ -196,15 +196,15 @@ def db_edit_song(song_id: int, song_data: SongUpdate, session: Session) -> Song:
         song = convert_lyrics_into_song_lines(lyrics=update_data["lyrics"], song=song)
 
         song.title = update_data.get("title", song.title)
-        song.artist = update_data.get("artist", song.artist)
+        song.artist_id = update_data.get("artist_id", song.artist_id)
 
         session.commit()
         session.refresh(song)
         return song
 
     # Handle title/artist if lyrics not provided
-    for field, value in update_data.items():
-        setattr(song, field, value)
+    song.title = update_data.get("title", song.title)
+    song.artist_id = update_data.get("artist_id", song.artist_id)
 
     session.commit()
     session.refresh(song)

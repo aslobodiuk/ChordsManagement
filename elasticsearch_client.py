@@ -14,7 +14,7 @@ def index_song(song: Song):
     """
     doc = {
         "title": song.title,
-        "artist": song.artist,
+        "artist": song.artist.name,
         "lines": " ".join([line.text for line in song.lines])
     }
     es.index(index=settings.ES_INDEX_NAME, id=str(song.id), body=doc)

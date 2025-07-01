@@ -7,7 +7,6 @@ from sqlmodel import SQLModel, Field, Relationship
 class Song(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     title: str
-    artist: str
     lines: list["Line"] = Relationship(
         back_populates="song",
         sa_relationship_kwargs={
@@ -15,6 +14,8 @@ class Song(SQLModel, table=True):
             "order_by": "Line.id"
         }
     )
+    artist_id: int = Field(..., foreign_key="artist.id")
+    artist: "Artist" = Relationship(back_populates="songs")
 
 
 class Line(SQLModel, table=True):
@@ -51,3 +52,14 @@ class Chord(SQLModel, table=True):
     name: str
     line_id: int = Field(..., foreign_key="line.id")
     line: Line = Relationship(back_populates="chords")
+
+class Artist(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    songs: list[Song] = Relationship(
+        back_populates="artist",
+        sa_relationship_kwargs={
+            "cascade": "all, delete-orphan",
+            "order_by": "Song.id"
+        }
+    )

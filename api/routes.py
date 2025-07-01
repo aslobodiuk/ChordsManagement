@@ -1,12 +1,13 @@
 from typing import List, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from data_processing import convert_songs_to_pdf
 from db import get_session
 from elasticsearch_client import index_song, es
+from models.db_models import Artist
 from models.operations import (
     db_create_song, db_read_song, NotFoundError, db_read_songs, SongDisplayMode,
     db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
@@ -108,7 +109,7 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         Parameters
         ----------
         `song_in` : `SongCreate`
-            Input data containing title, artist, and raw lyrics string.\n
+            Input data containing title, artist_id, and raw lyrics string.\n
         `session` : `Session`
             Database session dependency.
 
@@ -122,6 +123,9 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         The raw lyrics string is parsed and converted into structured lines and chords
         before saving to the database.
     """
+    artist = session.exec(select(Artist).where(Artist.id == song_in.artist_id)).first()
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist with given ID does not exist")
     song = db_create_song(song_in, session)
     # add to Elasticsearch
     index_song(song)
@@ -145,7 +149,8 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
         `song_id` : `int`
             The ID of the song to update.\n
         `song_data` : `SongUpdate`
-            A Pydantic model containing the fields to update. Fields not set will be ignored.\n
+            A Pydantic model containing the fields to update (title, artist_id, and raw lyrics string).
+            Fields not set will be ignored.\n
         `session` : `Session`
             Database session dependency, injected by FastAPI.
 
@@ -201,7 +206,7 @@ def delete_songs(
         # remove from Elasticsearch
         for song in songs:
             es.delete(index=settings.ES_INDEX_NAME, id=str(song.id), ignore=[404])
-        return songs
+        return Response(status_code=204)
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
 

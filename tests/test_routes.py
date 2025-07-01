@@ -31,7 +31,7 @@ def test_delete_song(client, test_session):
         headers={"Content-Type": "application/json"},
         json={"song_ids": [songs[0].id, songs[1].id]}
     )
-    assert response.status_code == 200
+    assert response.status_code == 204
     # Trying to get deleted elements
     response = client.get(f"/songs/{songs[0].id}")
     assert response.status_code == 404
@@ -53,30 +53,31 @@ def test_delete_song_es_index(client, test_session):
             es.get(index=settings.ES_INDEX_NAME, id=str(song_id))
 
 def test_update_song(client, test_session):
-    songs = populate_test_db(test_session, num_songs=1)
+    songs = populate_test_db(test_session, num_songs=2)
 
-    payload = {"title": "New Title", "artist": "New Artist"}
+    payload = {"title": "New Title", "artist_id": songs[1].artist_id}
     response = client.put(f"/songs/{songs[0].id}", json=payload)
     data = response.json()
     assert response.status_code == 200
     assert data["title"] == "New Title"
-    assert data["artist"] == "New Artist"
+    assert data["artist"]["name"] == songs[1].artist.name
 
 def test_update_song_es_index(client, test_session):
-    songs = populate_test_db(test_session, num_songs=1)
+    songs = populate_test_db(test_session, num_songs=2)
 
     first_line, second_line = "New line 1", "New line 2"
-    payload = {"title": "New Title", "artist": "New Artist", "lyrics": f"{first_line}\n{second_line}"}
+    payload = {"title": "New Title", "artist_id": songs[1].artist_id, "lyrics": f"{first_line}\n{second_line}"}
     client.put(f"/songs/{songs[0].id}", json=payload)
 
     es_doc = es.get(index=settings.ES_INDEX_NAME, id=str(songs[0].id))
     assert es_doc["found"] is True
     assert "New Title" in es_doc["_source"]["title"]
-    assert "New Artist" in es_doc["_source"]["artist"]
+    assert songs[1].artist.name in es_doc["_source"]["artist"]
     assert f"{first_line} {second_line}" in es_doc["_source"]["lines"]
 
-def test_create_song(client):
-    payload = {"title": "New Title", "artist": "New Artist", "lyrics": "Lyrics"}
+def test_create_song(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+    payload = {"title": "New Title", "artist_id": songs[0].artist_id, "lyrics": "Lyrics"}
     response = client.post("/songs", json=payload)
     assert response.status_code == 200
     assert "id" in response.json()
@@ -86,13 +87,25 @@ def test_create_song(client):
     response = client.get(f"/songs/{song_id}")
     assert response.status_code == 200
 
-def test_create_song_with_improper_input(client):
-    payload = {"title": "New Title", "artist": "New Artist"}
+def test_create_song_with_lack_of_input(client):
+    payload = {"title": "New Title", "lyrics": "Lyrics"}
     response = client.post("/songs", json=payload)
     assert response.status_code == 422
 
-def test_create_song_es_index(client):
-    payload = {"title": "New Title", "artist": "New Artist", "lyrics": "Lyrics"}
+def test_create_song_with_incorrect_artist_input(client):
+    payload = {"title": "New Title", "artist": "Artist name, not ID", "lyrics": "Lyrics"}
+    response = client.post("/songs", json=payload)
+    assert response.status_code == 422
+
+def test_with_non_existing_artist(client):
+    payload = {"title": "New Title", "artist_id": 999, "lyrics": "Lyrics"}
+    response = client.post("/songs", json=payload)
+    assert response.status_code == 404
+    assert response.json()['detail'] == "Artist with given ID does not exist"
+
+def test_create_song_es_index(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+    payload = {"title": "New Title", "artist_id": songs[0].artist_id, "lyrics": "Lyrics"}
     response = client.post("/songs", json=payload)
     song_id = response.json()["id"]
     es.indices.refresh(index=settings.ES_INDEX_NAME)
@@ -102,8 +115,8 @@ def test_create_song_es_index(client):
     assert es_doc["found"] is True
 
     # Check ES document contents
-    assert payload["title"] in es_doc["_source"]["title"]
-    assert payload["artist"] in es_doc["_source"]["artist"]
+    assert response.json()["title"] in es_doc["_source"]["title"]
+    assert response.json()["artist"]["name"] in es_doc["_source"]["artist"]
 
 def test_export_to_pdf(client, test_session):
     songs = populate_test_db(test_session, num_songs=2)
