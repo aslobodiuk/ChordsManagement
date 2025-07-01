@@ -4,7 +4,7 @@ from typing import List, Union
 
 from sqlalchemy import Sequence
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, select
+from sqlmodel import Session, select, and_
 from fastapi import Query
 
 from data_processing import convert_lyrics_into_song_lines
@@ -94,7 +94,7 @@ def db_read_song(
     song = db_find_song(song_id, session)
     return choose_proper_display(display, song)
 
-def db_find_songs(skip: int, limit: int, search: str, session: Session):
+def db_find_songs(skip: int, limit: int, search: str, artists: List[int], session: Session):
     """
         Fetches songs with pagination and optional Elasticsearch-based search.
 
@@ -112,10 +112,12 @@ def db_find_songs(skip: int, limit: int, search: str, session: Session):
 
         song_ids = [highlight['id'] for highlight in search_result]
 
-        # Re-order songs by ID order from ES
+        conditions = [Song.id.in_(song_ids)]
+        if artists:
+            conditions.append(Song.artist_id.in_(artists))
         statement = (
             select(Song)
-            .where(Song.id.in_(song_ids))
+            .where(and_(*conditions))
             .options(selectinload(Song.lines).selectinload(Line.chords))
         )
         songs = session.exec(statement).all()
@@ -133,6 +135,8 @@ def db_find_songs(skip: int, limit: int, search: str, session: Session):
         .limit(limit)
         .options(selectinload(Song.lines).selectinload(Line.chords))
     )
+    if artists:
+        statement = statement.where(Song.artist_id.in_(artists))
     return session.exec(statement).all(), []
 
 def db_read_songs(
@@ -140,6 +144,7 @@ def db_read_songs(
     limit: int,
     search: str,
     session: Session,
+    artists: List[int] = Query(default=[]),
     display: SongDisplayMode = Query(default=SongDisplayMode.full)
 ) -> Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]:
     """
@@ -153,12 +158,13 @@ def db_read_songs(
         limit: Max number of songs to return.
         search: Search term (optional).
         session: Active DB session.
+        artists: Artist IDs to include (optional).
         display: Output format (e.g., full, short).
 
     Returns:
         List of song representations with optional highlights.
     """
-    songs, search_result = db_find_songs(skip, limit, search, session)
+    songs, search_result = db_find_songs(skip, limit, search, artists, session)
     highlights = defaultdict(list)
     for data in search_result:
         highlights[int(data['id'])] = data['highlight']

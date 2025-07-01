@@ -16,6 +16,7 @@ from models.schemas import (
     SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
 )
 from settings import get_settings
+from utils.api_utils import parse_comma_separated_ints
 from utils.pdf_utils import create_pdf_base
 
 router = APIRouter(tags=["Songs"], prefix="/songs")
@@ -31,6 +32,7 @@ def read_songs(
         skip: int = 0,
         limit: int = 100,
         search: str = "",
+        artists: List[int] = Depends(parse_comma_separated_ints("artists")),
         display: SongDisplayMode = Query(default=SongDisplayMode.full),
         session: Session = Depends(get_session)
 ):
@@ -48,6 +50,10 @@ def read_songs(
             Matches are performed across song title, artist, and lyrics.
             If a match is found, highlighted snippets will be included in the response.
             When specified, songs are ordered by relevance instead of creation order.\n
+        `artists`: `List[int]`, `optional`
+            Comma-separated list of artist IDs to filter songs by.
+            Example `artists=1,2,3`.
+            If omitted or empty, no filtering by artist is applied.\n
         `display` : `SongDisplayMode`, `optional`
             Controls which fields are included in the response model (e.g., `full`, `short`, `for_edit`, `for_display`).\n
         `session`: `Session`
@@ -58,7 +64,7 @@ def read_songs(
         `Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]`
             A list of songs matching the filter criteria and display mode.
     """
-    return db_read_songs(skip=skip, limit=limit, search=search, display=display, session=session)
+    return db_read_songs(skip=skip, limit=limit, search=search, artists=artists, display=display, session=session)
 
 @router.get(
     path="/{song_id}",

@@ -86,7 +86,7 @@ def test_db_read_song(display: SongDisplayMode, test_session):
 
 def test_db_find_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
-    found, _ = db_find_songs(skip=0, limit=100, search="", session=test_session)
+    found, _ = db_find_songs(skip=0, limit=100, search="", artists=[], session=test_session)
     assert len(found) == len(songs)
     assert [song.id for song in found] == [song.id for song in songs]
 
@@ -103,7 +103,7 @@ def test_db_find_songs(test_session):
 def test_db_find_songs_with_search(search, expected_count, expected_field_name, test_session):
     songs = populate_test_db(test_session, num_songs=3)
     search_term = search(songs)
-    found, search_results = db_find_songs(skip=0, limit=100, search=search_term, session=test_session)
+    found, search_results = db_find_songs(skip=0, limit=100, search=search_term, artists=[], session=test_session)
 
     if expected_field_name is not None:
         highlights = search_results[0]['highlight']
@@ -121,6 +121,13 @@ def test_db_find_songs_with_search(search, expected_count, expected_field_name, 
         assert search_results == []
 
     assert len(found) == expected_count
+
+def test_db_find_songs_artists_filtering(test_session):
+    songs = populate_test_db(test_session, num_songs=4)
+    expected_songs = songs[:2]
+    found, _ = db_find_songs(skip=0, limit=100, search="", artists=[song.artist_id for song in expected_songs], session=test_session)
+    assert len(found) == len(expected_songs)
+    assert [song.id for song in found] == [song.id for song in expected_songs]
 
 def test_db_create_song(test_session):
     songs = populate_test_db(test_session, num_songs=1)

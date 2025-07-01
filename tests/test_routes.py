@@ -14,6 +14,13 @@ def test_read_songs(client, test_session):
     assert response.status_code == 200
     assert len(response.json()) == 2
 
+def test_read_songs_artists_param_transfer(client, test_session):
+    songs = populate_test_db(test_session, num_songs=4)
+    query_string = f"?artists={songs[0].artist_id},{songs[1].artist_id}"
+    response = client.get("/songs/" + query_string)
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
 def test_get_song_by_id(client, test_session):
     songs = populate_test_db(test_session, num_songs=1)
 
