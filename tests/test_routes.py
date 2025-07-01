@@ -133,3 +133,18 @@ def test_export_to_pdf(client, test_session):
     assert response.content.startswith(b"%PDF"), "Response does not look like a valid PDF file"
     assert "Content-Disposition" in response.headers
     assert "filename=streamed.pdf" in response.headers["Content-Disposition"]
+
+def test_read_artists(client, test_session):
+    populate_test_db(test_session, num_songs=2)
+
+    response = client.get("/artists")
+    assert response.status_code == 200
+    assert len(response.json()) == 2
+
+def test_get_artist_by_id(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+
+    response = client.get(f"/artists/{songs[0].artist_id}")
+    data = response.json()
+    assert response.status_code == 200
+    assert data["id"] == songs[0].artist_id

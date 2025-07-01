@@ -4,7 +4,9 @@ from fastapi import FastAPI, Response
 from sqlalchemy.orm import selectinload
 from sqlmodel import select
 
-from api.routes import router
+from api.songs import router as songs_router
+from api.artists import router as artists_router
+
 from db import get_session
 from elasticsearch_client import index_song, es
 from models.db_models import Song
@@ -37,7 +39,8 @@ async def lifespan(_: FastAPI):
         session.close()
 
 app = FastAPI(lifespan=lifespan, title="Chord Editor API")
-app.include_router(router)
+app.include_router(songs_router)
+app.include_router(artists_router)
 
 @app.get("/", include_in_schema=False)
 def root():

@@ -10,6 +10,12 @@ class ArtistRead(SQLModel):
     id: int
     name: str
 
+class ArtistReadWithSongs(SQLModel):
+    id: int
+    name: str
+    songs: List["SongReadOnlyTitle"]
+
+
 class ChordRead(SQLModel):
     id: int
     position: int
@@ -20,6 +26,11 @@ class LineRead(SQLModel):
     id: int
     text: str
     chords: List[ChordRead] = []
+
+
+class SongReadOnlyTitle(SQLModel):
+    id: int
+    title: str
 
 
 class SongRead(SQLModel):

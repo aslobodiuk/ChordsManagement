@@ -1,9 +1,12 @@
 import pytest
 from pydantic import ValidationError
+from sqlmodel import select
 
+from models.db_models import Song
 from models.operations import (
     NotFoundError, SongDisplayMode, db_find_song, db_find_songs_by_id,
-    db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs, DISPLAY_MODES
+    db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs, DISPLAY_MODES,
+    db_read_artist, db_read_artists
 )
 from models.schemas import SongIdsRequest, SongCreate, SongUpdate
 from tests.utils import populate_test_db
@@ -238,3 +241,24 @@ def test_db_delete_songs_all_cases(id_selector, expected_deleted, expected_remai
 
         assert sorted(deleted_ids) == sorted(expected_deleted(songs))
         assert sorted(remaining_ids) == sorted(expected_remaining(songs))
+
+def test_db_read_artist(test_session):
+    songs = populate_test_db(test_session, num_songs=3)
+    artist = db_read_artist(artist_id=songs[0].artist_id, session=test_session)
+    assert artist.id == songs[0].artist_id
+    assert artist.name == songs[0].artist.name
+
+def test_db_read_artist_not_found(test_session):
+    with pytest.raises(NotFoundError) as exc_info:
+        db_read_artist(artist_id=999, session=test_session)
+    assert exc_info.value.message == "Artist with ID 999 not found"
+
+def test_db_read_artists(test_session):
+    songs = populate_test_db(test_session, num_songs=4)
+    expected_artists = [song.artist for song in songs]
+    found = db_read_artists(skip=0, limit=100, session=test_session)
+    assert len(found) == len(expected_artists)
+    assert [artist.id for artist in found] == [artist.id for artist in expected_artists]
+    for artist in found:
+        artist_songs = test_session.exec(select(Song).where(Song.artist_id == artist.id)).all()
+        assert len(artist.songs) == len(artist_songs)
