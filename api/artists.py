@@ -5,8 +5,9 @@ from sqlmodel import Session, select
 
 from db import get_session
 from models.db_models import Artist
-from models.operations import db_read_artists, NotFoundError, db_read_artist, db_create_artist, db_delete_artist
-from models.schemas import ArtistReadWithSongs, ArtistRead, ArtistCreate
+from models.operations import db_read_artists, NotFoundError, db_read_artist, db_create_artist, db_delete_artist, \
+    db_edit_artist
+from models.schemas import ArtistReadWithSongs, ArtistRead, ArtistCreate, ArtistUpdate
 
 router = APIRouter(tags=["Artists"], prefix="/artists")
 
@@ -128,5 +129,38 @@ def delete_artist(artist_id: int, session: Session = Depends(get_session)):
     try:
         db_delete_artist(artist_id, session)
         return Response(status_code=204)
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail=f"Artist with ID {artist_id} not found")
+
+@router.put(
+    path="/{artist_id}",
+    response_model=ArtistReadWithSongs,
+    summary="Artist update"
+)
+def update_song(artist_id: int, artist_data: ArtistUpdate, session: Session = Depends(get_session)):
+    """
+        Update an existing artist by ID.
+
+        Parameters
+        ----------
+        `artist_id` : `int`
+            The ID of the artist to update.\n
+        `artist_data` : `ArtistUpdate`
+            The updated artist data.\n
+        `session` : `Session`, optional
+            Database session dependency.
+
+        Returns
+        -------
+        `ArtistReadWithSongs`
+            The updated artist, including associated songs.
+
+        Raises
+        ------
+        `HTTPException` (404)
+            If the artist with the specified ID does not exist.
+    """
+    try:
+        return db_edit_artist(artist_id, artist_data, session)
     except NotFoundError:
         raise HTTPException(status_code=404, detail=f"Artist with ID {artist_id} not found")

@@ -12,7 +12,7 @@ from elasticsearch_client import search_songs
 from models.db_models import Song, Line, Artist
 from models.schemas import (
     SongCreate, SongReadShort, SongRead, SongReadForEdit,
-    SongReadForDisplay, SongIdsRequest, SongUpdate, ArtistCreate, ArtistRead
+    SongReadForDisplay, SongIdsRequest, SongUpdate, ArtistCreate, ArtistRead, ArtistUpdate
 )
 
 class NotFoundError(Exception):
@@ -259,4 +259,17 @@ def db_delete_artist(artist_id: int, session: Session):
         raise NotFoundError(message="Artist with ID {} not found".format(artist_id))
     session.delete(artist)
     session.commit()
+    return artist
+
+def db_edit_artist(artist_id: int, artist_data: ArtistUpdate, session: Session) -> Artist:
+    """
+    Update an existing artist's name and return the updated artist.
+
+    Raises:
+        NotFoundError: If the artist with the given ID does not exist.
+    """
+    artist = db_read_artist(artist_id, session)
+    artist.name = artist_data.name
+    session.commit()
+    session.refresh(artist)
     return artist

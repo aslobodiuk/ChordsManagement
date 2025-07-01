@@ -18,6 +18,9 @@ class ArtistReadWithSongs(SQLModel):
 class ArtistCreate(SQLModel):
     name: str
 
+class ArtistUpdate(SQLModel):
+    name: str
+
 class ChordRead(SQLModel):
     id: int
     position: int

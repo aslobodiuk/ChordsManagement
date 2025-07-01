@@ -1,7 +1,6 @@
 import pytest
 from opensearchpy import NotFoundError
 
-from api import songs
 from elasticsearch_client import es
 from settings import get_settings
 from tests.utils import populate_test_db
@@ -183,5 +182,23 @@ def test_delete_artist(client, test_session):
 
 def test_delete_artist_not_found(client, test_session):
     response = client.delete(f"/artists/999")
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Artist with ID 999 not found"
+
+def test_update_artist(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+
+    new_artist_name = "New Artist"
+    payload = {"name": new_artist_name}
+    response = client.put(f"/artists/{songs[0].artist_id}", json=payload)
+    data = response.json()
+    assert response.status_code == 200
+    assert data["id"] == songs[0].artist_id
+    assert data["name"] == new_artist_name
+
+def test_update_artist_not_found(client, test_session):
+    new_artist_name = "New Artist"
+    payload = {"name": new_artist_name}
+    response = client.put(f"/artists/999", json=payload)
     assert response.status_code == 404
     assert response.json()["detail"] == "Artist with ID 999 not found"

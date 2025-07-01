@@ -6,9 +6,9 @@ from models.db_models import Song
 from models.operations import (
     NotFoundError, SongDisplayMode, db_find_song, db_find_songs_by_id,
     db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs, DISPLAY_MODES,
-    db_read_artist, db_read_artists, db_create_artist, db_delete_artist
+    db_read_artist, db_read_artists, db_create_artist, db_delete_artist, db_edit_artist
 )
-from models.schemas import SongIdsRequest, SongCreate, SongUpdate, ArtistCreate
+from models.schemas import SongIdsRequest, SongCreate, SongUpdate, ArtistCreate, ArtistUpdate
 from tests.utils import populate_test_db
 
 
@@ -279,3 +279,11 @@ def test_db_delete_artist(test_session):
     existing_artists = db_read_artists(skip=0, limit=100, session=test_session)
     assert len(existing_songs) == 0
     assert len(existing_artists) == 0
+
+def test_db_edit_artist(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+    artist_data = ArtistUpdate(name="New Artist")
+    db_edit_artist(artist_id=songs[0].artist_id, artist_data=artist_data, session=test_session)
+
+    created_artist = db_read_artist(songs[0].artist_id, test_session)
+    assert created_artist.name == "New Artist"
