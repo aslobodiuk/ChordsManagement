@@ -1,11 +1,12 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlmodel import Session, select
 
 from db import get_session
-from models.operations import db_read_artists, NotFoundError, db_read_artist
-from models.schemas import ArtistReadWithSongs
+from models.db_models import Artist
+from models.operations import db_read_artists, NotFoundError, db_read_artist, db_create_artist
+from models.schemas import ArtistReadWithSongs, ArtistRead, ArtistCreate
 
 router = APIRouter(tags=["Artists"], prefix="/artists")
 
@@ -64,3 +65,36 @@ def read_artist(artist_id: int, session: Session = Depends(get_session)):
         return db_read_artist(artist_id, session)
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Artist not found")
+
+@router.post(
+    path="/",
+    response_model=ArtistRead,
+    summary="Artist create"
+)
+def create_song(payload: ArtistCreate, session: Session = Depends(get_session)):
+    """
+        Create a new artist.
+
+        Parameters
+        ----------
+        `payload`: `ArtistCreate`
+            Object containing the name of the artist to create.\n
+        `session`: `Session`, `optional`
+            Database session dependency.
+
+        Returns
+        -------
+        `ArtistRead`
+            The created artist, including its generated ID.
+
+        Raises
+        ------
+        `HTTPException` (400)
+            If an artist with the same name already exists.
+    """
+    if session.exec(select(Artist).where(Artist.name == payload.name)).first():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Artist with name '{payload.name}' already exists"
+        )
+    return db_create_artist(payload, session)

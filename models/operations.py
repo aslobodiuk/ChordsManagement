@@ -5,14 +5,14 @@ from typing import List, Union
 from sqlalchemy import Sequence
 from sqlalchemy.orm import selectinload
 from sqlmodel import Session, select, and_
-from fastapi import Query
+from fastapi import Query, HTTPException, status
 
 from data_processing import convert_lyrics_into_song_lines
 from elasticsearch_client import search_songs
 from models.db_models import Song, Line, Artist
 from models.schemas import (
     SongCreate, SongReadShort, SongRead, SongReadForEdit,
-    SongReadForDisplay, SongIdsRequest, SongUpdate
+    SongReadForDisplay, SongIdsRequest, SongUpdate, ArtistCreate, ArtistRead
 )
 
 class NotFoundError(Exception):
@@ -227,10 +227,8 @@ def db_delete_songs(request: SongIdsRequest, session: Session) -> List[Song]:
     session.commit()
     return songs
 
-def db_read_artists(skip: int, limit: int, session: Session):
-    """
-        Fetch a paginated list of artists with their related songs.
-    """
+def db_read_artists(skip: int, limit: int, session: Session) -> Sequence[Artist]:
+    """Fetch a paginated list of artists with their related songs."""
     statement = (
         select(Artist)
         .offset(skip)
@@ -239,11 +237,17 @@ def db_read_artists(skip: int, limit: int, session: Session):
     )
     return session.exec(statement).all()
 
-def db_read_artist(artist_id: int, session: Session):
-    """
-        Retrieve a single artist by ID or raise NotFoundError if not found.
-    """
+def db_read_artist(artist_id: int, session: Session) -> Artist:
+    """Retrieve a single artist by ID or raise NotFoundError if not found."""
     artist: Artist | None = session.get(Artist, artist_id)
     if artist is None:
         raise NotFoundError(message="Artist with ID {} not found".format(artist_id))
+    return artist
+
+def db_create_artist(payload: ArtistCreate, session: Session) -> Artist:
+    """Create and persist a new artist from the given payload."""
+    artist = Artist(name=payload.name)
+    session.add(artist)
+    session.commit()
+    session.refresh(artist)
     return artist

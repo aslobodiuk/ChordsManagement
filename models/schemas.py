@@ -15,6 +15,8 @@ class ArtistReadWithSongs(SQLModel):
     name: str
     songs: List["SongReadOnlyTitle"]
 
+class ArtistCreate(SQLModel):
+    name: str
 
 class ChordRead(SQLModel):
     id: int

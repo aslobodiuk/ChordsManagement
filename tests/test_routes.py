@@ -148,3 +148,24 @@ def test_get_artist_by_id(client, test_session):
     data = response.json()
     assert response.status_code == 200
     assert data["id"] == songs[0].artist_id
+
+def test_create_artist(client):
+    payload = {"name": "New Artist"}
+    response = client.post("/artists", json=payload)
+    assert response.status_code == 200
+    assert "id" in response.json()
+
+    # get created artist
+    artist_id = response.json()["id"]
+    response = client.get(f"/artists/{artist_id}")
+    assert response.status_code == 200
+
+def test_create_artist_already_exists(client):
+    artist_name = "New Artist"
+    payload = {"name": artist_name}
+    client.post("/artists", json=payload)
+
+    # try to create same artist
+    response = client.post("/artists", json=payload)
+    assert response.status_code == 400
+    assert response.json()["detail"] == f"Artist with name '{artist_name}' already exists"
