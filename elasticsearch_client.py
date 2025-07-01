@@ -9,7 +9,7 @@ es = OpenSearch(settings.ELASTICSEARCH_URL)
 
 def index_song(song: Song):
     """
-    Index a song in OpenSearch using its ID.
+    Index a song in Elasticsearch using its ID.
     `song` should be an instance of your Song model, with related lines loaded.
     """
     doc = {

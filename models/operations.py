@@ -2,8 +2,9 @@ from collections import defaultdict
 from enum import Enum
 from typing import List, Union
 
+from sqlalchemy import Sequence
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, select, or_
+from sqlmodel import Session, select
 from fastapi import Query
 
 from data_processing import convert_lyrics_into_song_lines
@@ -51,13 +52,27 @@ def db_find_songs_by_id(request: SongIdsRequest, session: Session) -> List[Song]
         raise NotFoundError(message="Songs with such IDs were not found")
     return songs
 
-def db_find_all_songs(session: Session) -> List[Song]:
+def db_find_all_songs(session: Session) -> Sequence[Song]:
     """
     Return all songs from the database (no filtering or pagination).
     """
     return session.exec(select(Song)).all()
 
 def choose_proper_display(display, song, highlights=None):
+    """
+        Returns a song model formatted according to the specified display mode.
+
+        Highlights are attached if provided. In certain modes, raw lines are also included
+        for internal use (e.g., editing or display rendering).
+
+        Args:
+            display: Selected display mode (enum).
+            song: Original `Song` object from the DB.
+            highlights: Optional search highlights from Elasticsearch.
+
+        Returns:
+            An instance of the appropriate `SongRead*` model.
+    """
     display_mode = DISPLAY_MODES[display]
     song_out = display_mode.model_validate(song)
     if highlights:
@@ -81,8 +96,14 @@ def db_read_song(
 
 def db_find_songs(skip: int, limit: int, search: str, session: Session):
     """
-    Query songs with pagination and optional search in title/artist.
-    Includes preloading of lines and chords.
+        Fetches songs with pagination and optional Elasticsearch-based search.
+
+        If `search` is provided, returns songs matching the search query using
+        Elasticsearch relevance order. Otherwise, returns paginated results
+        directly from the database.
+
+        Returns:
+            A tuple: (list of Song objects, raw search results or empty list).
     """
     if search:
         search_result = search_songs(search, limit=limit + skip)
@@ -122,11 +143,22 @@ def db_read_songs(
     display: SongDisplayMode = Query(default=SongDisplayMode.full)
 ) -> Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]:
     """
-    Return a list of songs in the specified display mode.
-    Supports short/full/for_edit/for_display formats.
+    Returns a list of songs with optional search and display mode.
+
+    If `search` is provided, fetches matching songs from Elasticsearch
+    and adds field highlights. Results are formatted based on `display`.
+
+    Args:
+        skip: Records to skip (pagination).
+        limit: Max number of songs to return.
+        search: Search term (optional).
+        session: Active DB session.
+        display: Output format (e.g., full, short).
+
+    Returns:
+        List of song representations with optional highlights.
     """
     songs, search_result = db_find_songs(skip, limit, search, session)
-    # if search is present - we display search highlights in the response
     highlights = defaultdict(list)
     for data in search_result:
         highlights[int(data['id'])] = data['highlight']
@@ -178,7 +210,7 @@ def db_edit_song(song_id: int, song_data: SongUpdate, session: Session) -> Song:
     session.refresh(song)
     return song
 
-def db_delete_songs(request: SongIdsRequest, session: Session) -> List[SongRead]:
+def db_delete_songs(request: SongIdsRequest, session: Session) -> List[Song]:
     """
     Delete all songs matching the provided list of IDs.
     Returns deleted song data.
