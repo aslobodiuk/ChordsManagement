@@ -43,16 +43,19 @@ def read_songs(
         `limit`: `int`, `optional`
             Maximum number of records to return (default is 100).\n
         `search`: `str`, `optional`
-            Search string to filter songs by title or artist (case-insensitive).\n
+            A case-insensitive search query string.
+            Matches are performed across song title, artist, and lyrics.
+            If a match is found, highlighted snippets will be included in the response.
+            When specified, songs are ordered by relevance instead of creation order.\n
         `display` : `SongDisplayMode`, `optional`
-            Controls which fields are included in the response.\n
+            Controls which fields are included in the response model (e.g., `full`, `short`, `for_edit`, `for_display`).\n
         `session`: `Session`
             Database session dependency.
 
         Returns
         -------
         `Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]`
-            List of songs matching the query.
+            A list of songs matching the filter criteria and display mode.
     """
     return db_read_songs(skip=skip, limit=limit, search=search, display=display, session=session)
 

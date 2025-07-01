@@ -42,4 +42,4 @@ app.include_router(router)
 @app.get("/", include_in_schema=False)
 def root():
     """Health check"""
-    return Response("Server is running!", status_code=200)
+    return Response("Server is running.", status_code=200)

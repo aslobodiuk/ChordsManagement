@@ -90,19 +90,37 @@ def test_db_find_songs(test_session):
     assert len(found) == len(songs)
     assert [song.id for song in found] == [song.id for song in songs]
 
-@pytest.mark.skip(reason="Need to fix this. Mock elasticsearch")
 @pytest.mark.parametrize(
-    "search",
+    "search, expected_count, expected_field_name",
     [
-        pytest.param(lambda songs: songs[0].title, id="search_by_title"),
-        pytest.param(lambda songs: songs[0].artist, id="search_by_artist"),
+        pytest.param(lambda songs: songs[0].title.split()[-1], 1, "title", id="search_by_title"),
+        pytest.param(lambda songs: songs[0].artist.split()[-1], 1, "artist", id="search_by_artist"),
+        pytest.param(lambda songs: songs[0].lines[0].text.split()[0], 1, "lines", id="search_by_lyrics"),
+        pytest.param(lambda songs: "NotExistedString", 0, None, id="search_not_found"),
+        pytest.param(lambda songs: songs[0].title.split()[-1].upper(), 1, "title", id="search_case_insensitive")
     ]
 )
-def test_db_find_songs_with_search(search, test_session):
+def test_db_find_songs_with_search(search, expected_count, expected_field_name, test_session):
     songs = populate_test_db(test_session, num_songs=3)
-    found, _ = db_find_songs(skip=0, limit=100, search=search(songs), session=test_session)
-    assert len(found) == 1
-    assert found[0].id == songs[1].id
+    search_term = search(songs)
+    found, search_results = db_find_songs(skip=0, limit=100, search=search_term, session=test_session)
+
+    if expected_field_name is not None:
+        highlights = search_results[0]['highlight']
+
+        assert found[0].id == songs[0].id
+
+        field_assertion_msg = f"Expected highlight field '{expected_field_name}', got: {highlights}"
+        assert expected_field_name in highlights, field_assertion_msg
+
+        term_assertion_msg = f"Expected term '<em>{search_term}</em>' in highlights: {highlights}"
+        expected_highlight = f"<em>{search_term}</em>".upper()
+        actual_highlight = highlights[expected_field_name][0].upper()
+        assert expected_highlight in actual_highlight, term_assertion_msg
+    else:
+        assert search_results == []
+
+    assert len(found) == expected_count
 
 def test_db_create_song(test_session):
     song_in = SongCreate(
