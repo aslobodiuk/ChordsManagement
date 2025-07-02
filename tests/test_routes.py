@@ -59,6 +59,11 @@ def test_delete_song_es_index(client, test_session):
         with pytest.raises(NotFoundError):
             es.get(index=settings.ES_SONG_INDEX_NAME, id=str(song_id))
 
+    for song in [songs[0], songs[1]]:
+        es_doc = es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(song.artist_id))
+        assert es_doc["found"] is True
+        assert song.title not in es_doc["_source"]["songs"]
+
 def test_update_song(client, test_session):
     songs = populate_test_db(test_session, num_songs=2)
 
@@ -72,15 +77,29 @@ def test_update_song(client, test_session):
 def test_update_song_es_index(client, test_session):
     songs = populate_test_db(test_session, num_songs=2)
 
+    old_artist_id = songs[0].artist_id
+    old_song_name = songs[0].title
     first_line, second_line = "New line 1", "New line 2"
     payload = {"title": "New Title", "artist_id": songs[1].artist_id, "lyrics": f"{first_line}\n{second_line}"}
     client.put(f"/songs/{songs[0].id}", json=payload)
 
+    # check that song was reindexed
     es_doc = es.get(index=settings.ES_SONG_INDEX_NAME, id=str(songs[0].id))
     assert es_doc["found"] is True
-    assert "New Title" in es_doc["_source"]["title"]
-    assert songs[1].artist.name in es_doc["_source"]["artist"]
-    assert f"{first_line} {second_line}" in es_doc["_source"]["lines"]
+    assert es_doc["_source"]["title"] == "New Title"
+    assert es_doc["_source"]["artist"] == songs[1].artist.name
+    assert es_doc["_source"]["lines"] == f"{first_line} {second_line}"
+
+    # check that old artist was reindexed
+    es_doc = es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(old_artist_id))
+    assert es_doc["found"] is True
+    assert "New Title" not in es_doc["_source"]["songs"]
+    assert old_song_name not in es_doc["_source"]["songs"]
+
+    # check that new artist was reindexed
+    es_doc = es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(songs[1].artist.id))
+    assert es_doc["found"] is True
+    assert "New Title" in es_doc["_source"]["songs"]
 
 def test_create_song(client, test_session):
     songs = populate_test_db(test_session, num_songs=1)
@@ -104,7 +123,7 @@ def test_create_song_with_incorrect_artist_input(client):
     response = client.post("/songs", json=payload)
     assert response.status_code == 422
 
-def test_with_non_existing_artist(client):
+def test_create_song_with_non_existing_artist(client):
     payload = {"title": "New Title", "artist_id": 999, "lyrics": "Lyrics"}
     response = client.post("/songs", json=payload)
     assert response.status_code == 404
@@ -122,8 +141,15 @@ def test_create_song_es_index(client, test_session):
     assert es_doc["found"] is True
 
     # Check ES document contents
-    assert response.json()["title"] in es_doc["_source"]["title"]
-    assert response.json()["artist"]["name"] in es_doc["_source"]["artist"]
+    assert response.json()["title"] == es_doc["_source"]["title"]
+    assert response.json()["artist"]["name"] == es_doc["_source"]["artist"]
+
+    # Query ES to check that artist was indexed
+    es_doc = es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(songs[0].artist_id))
+    assert es_doc["found"] is True
+    # Check ES document contents
+    assert response.json()["title"] in es_doc["_source"]["songs"]
+    assert response.json()["artist"]["name"] == es_doc["_source"]["name"]
 
 def test_export_to_pdf(client, test_session):
     songs = populate_test_db(test_session, num_songs=2)
@@ -170,6 +196,20 @@ def test_create_artist_already_exists(client):
     assert response.status_code == 400
     assert response.json()["detail"] == f"Artist with name '{artist_name}' already exists"
 
+def test_create_artist_es_index(client, test_session):
+    payload = {"name": "New Artist"}
+    response = client.post("/artists", json=payload)
+    artist_id = response.json()["id"]
+    es.indices.refresh(index=settings.ES_SONG_INDEX_NAME)
+
+    # Query ES to check that song was indexed
+    es_doc = es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(artist_id))
+    assert es_doc["found"] is True
+
+    # Check ES document contents
+    assert response.json()["name"] == es_doc["_source"]["name"]
+    assert es_doc["_source"]["songs"] == []
+
 def test_delete_artist(client, test_session):
     songs = populate_test_db(test_session, num_songs=1)
 
@@ -184,6 +224,15 @@ def test_delete_artist_not_found(client, test_session):
     response = client.delete(f"/artists/999")
     assert response.status_code == 404
     assert response.json()["detail"] == "Artist with ID 999 not found"
+
+def test_delete_artist_es_index(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+
+    client.delete(f"/artists/{songs[0].artist_id}")
+    with pytest.raises(NotFoundError):
+        es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(songs[0].artist_id))
+    with pytest.raises(NotFoundError):
+        es.get(index=settings.ES_SONG_INDEX_NAME, id=str(songs[0].id))
 
 def test_update_artist(client, test_session):
     songs = populate_test_db(test_session, num_songs=1)
@@ -202,3 +251,18 @@ def test_update_artist_not_found(client, test_session):
     response = client.put(f"/artists/999", json=payload)
     assert response.status_code == 404
     assert response.json()["detail"] == "Artist with ID 999 not found"
+
+def test_update_artist_es_index(client, test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+
+    new_artist_name = "New Artist"
+    payload = {"name": new_artist_name}
+    client.put(f"/artists/{songs[0].artist_id}", json=payload)
+
+    es_doc = es.get(index=settings.ES_ARTIST_INDEX_NAME, id=str(songs[0].artist_id))
+    assert es_doc["found"] is True
+    assert new_artist_name == es_doc["_source"]["name"]
+
+    es_doc = es.get(index=settings.ES_SONG_INDEX_NAME, id=str(songs[0].id))
+    assert es_doc["found"] is True
+    assert new_artist_name == es_doc["_source"]["artist"]

@@ -293,9 +293,10 @@ def db_delete_artist(artist_id: int, session: Session):
     artist: Artist | None = session.get(Artist, artist_id)
     if artist is None:
         raise NotFoundError(message="Artist with ID {} not found".format(artist_id))
+    songs_ids = [song.id for song in artist.songs]
     session.delete(artist)
     session.commit()
-    return artist
+    return artist, songs_ids
 
 def db_edit_artist(artist_id: int, artist_data: ArtistUpdate, session: Session) -> Artist:
     """

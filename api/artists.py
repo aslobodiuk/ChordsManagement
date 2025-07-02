@@ -4,12 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlmodel import Session, select
 
 from db import get_session
+from elasticsearch_client import index_artist, es, index_song
 from models.db_models import Artist
 from models.operations import db_read_artists, NotFoundError, db_read_artist, db_create_artist, db_delete_artist, \
     db_edit_artist
 from models.schemas import ArtistReadWithSongs, ArtistRead, ArtistCreate, ArtistUpdate
+from settings import get_settings
 
 router = APIRouter(tags=["Artists"], prefix="/artists")
+
+settings = get_settings()
 
 @router.get(
     path="/",
@@ -103,7 +107,10 @@ def create_artist(payload: ArtistCreate, session: Session = Depends(get_session)
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Artist with name '{payload.name}' already exists"
         )
-    return db_create_artist(payload, session)
+    artist = db_create_artist(payload, session)
+    # add to Elasticsearch
+    index_artist(artist)
+    return artist
 
 @router.delete(
     path="/{artist_id}",
@@ -132,7 +139,11 @@ def delete_artist(artist_id: int, session: Session = Depends(get_session)):
             If no artist with the specified ID is found.
     """
     try:
-        db_delete_artist(artist_id, session)
+        artist, artist_song_ids = db_delete_artist(artist_id, session)
+        # delete artist and his songs from Elasticsearch
+        es.delete(index=settings.ES_ARTIST_INDEX_NAME, id=str(artist.id), ignore=[404])
+        for song_id in artist_song_ids:
+            es.delete(index=settings.ES_SONG_INDEX_NAME, id=str(song_id), ignore=[404])
         return Response(status_code=204)
     except NotFoundError:
         raise HTTPException(status_code=404, detail=f"Artist with ID {artist_id} not found")
@@ -166,6 +177,11 @@ def update_artist(artist_id: int, artist_data: ArtistUpdate, session: Session = 
             If the artist with the specified ID does not exist.
     """
     try:
-        return db_edit_artist(artist_id, artist_data, session)
+        artist = db_edit_artist(artist_id, artist_data, session)
+        # update indexes for artist and all his songs
+        index_artist(artist)
+        for song in artist.songs:
+            index_song(song)
+        return artist
     except NotFoundError:
         raise HTTPException(status_code=404, detail=f"Artist with ID {artist_id} not found")

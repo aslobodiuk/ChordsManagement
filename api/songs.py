@@ -6,8 +6,8 @@ from sqlmodel import Session, select
 
 from data_processing import convert_songs_to_pdf
 from db import get_session
-from elasticsearch_client import index_song, es
-from models.db_models import Artist
+from elasticsearch_client import index_song, es, index_artist
+from models.db_models import Artist, Song
 from models.operations import (
     db_create_song, db_read_song, NotFoundError, db_read_songs, SongDisplayMode,
     db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
@@ -135,6 +135,7 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
     song = db_create_song(song_in, session)
     # add to Elasticsearch
     index_song(song)
+    index_artist(song.artist)
     return song
 
 @router.put(
@@ -171,9 +172,13 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
             If no song is found with the provided ID.
         """
     try:
+        old_artist = session.exec(select(Artist).join(Artist.songs).where(Song.id == song_id)).first()
         song = db_edit_song(song_id, song_data, session)
         # update in Elasticsearch
         index_song(song)
+        if old_artist.id != song.artist.id:
+            index_artist(old_artist)
+        index_artist(song.artist)
         return song
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
@@ -212,6 +217,8 @@ def delete_songs(
         # remove from Elasticsearch
         for song in songs:
             es.delete(index=settings.ES_SONG_INDEX_NAME, id=str(song.id), ignore=[404])
+            artist = session.exec(select(Artist).where(Artist.id == song.artist_id)).first()
+            index_artist(artist)
         return Response(status_code=204)
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
