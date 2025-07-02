@@ -256,7 +256,7 @@ def test_db_read_artist_not_found(test_session):
 def test_db_read_artists(test_session):
     songs = populate_test_db(test_session, num_songs=4)
     expected_artists = [song.artist for song in songs]
-    found = db_read_artists(skip=0, limit=100, session=test_session)
+    found = db_read_artists(skip=0, limit=100, search="", session=test_session)
     assert len(found) == len(expected_artists)
     assert [artist.id for artist in found] == [artist.id for artist in expected_artists]
     for artist in found:
@@ -276,7 +276,7 @@ def test_db_delete_artist(test_session):
     songs = populate_test_db(test_session, num_songs=1)
     db_delete_artist(artist_id=songs[0].artist_id, session=test_session)
     existing_songs = db_find_all_songs(session=test_session)
-    existing_artists = db_read_artists(skip=0, limit=100, session=test_session)
+    existing_artists = db_read_artists(skip=0, limit=100, search="", session=test_session)
     assert len(existing_songs) == 0
     assert len(existing_artists) == 0
 
@@ -287,3 +287,35 @@ def test_db_edit_artist(test_session):
 
     created_artist = db_read_artist(songs[0].artist_id, test_session)
     assert created_artist.name == "New Artist"
+
+@pytest.mark.parametrize(
+    "search, expected_count, expected_field_name",
+    [
+        pytest.param(lambda songs: songs[0].artist.name.split()[-1], 1, "name", id="search_by_name"),
+        pytest.param(lambda songs: songs[0].title.split()[-1], 1, "songs", id="search_by_songs"),
+        pytest.param(lambda songs: "NotExistedString", 0, None, id="search_not_found"),
+        pytest.param(lambda songs: songs[0].title.split()[-1].upper(), 1, "songs", id="search_case_insensitive")
+    ]
+)
+def test_db_read_artists_with_search(search, expected_count, expected_field_name, test_session):
+    songs = populate_test_db(test_session, num_songs=3)
+    search_term = search(songs)
+    found = db_read_artists(skip=0, limit=100, search=search_term, session=test_session)
+
+    if expected_field_name is not None:
+        highlights = found[0].highlights
+
+        assert found[0].id == songs[0].artist_id
+        assert found[0].name == songs[0].artist.name
+
+        field_assertion_msg = f"Expected highlight field '{expected_field_name}', got: {highlights}"
+        assert expected_field_name in highlights, field_assertion_msg
+
+        term_assertion_msg = f"Expected term '<em>{search_term}</em>' in highlights: {highlights}"
+        expected_highlight = f"<em>{search_term}</em>".upper()
+        actual_highlight = highlights[expected_field_name][0].upper()
+        assert expected_highlight in actual_highlight, term_assertion_msg
+    else:
+        assert found == []
+
+    assert len(found) == expected_count

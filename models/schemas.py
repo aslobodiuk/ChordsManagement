@@ -14,6 +14,7 @@ class ArtistReadWithSongs(SQLModel):
     id: int
     name: str
     songs: List["SongReadOnlyTitle"]
+    highlights: Optional[dict[str, List[str]]] = None
 
 class ArtistCreate(SQLModel):
     name: str

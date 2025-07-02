@@ -8,11 +8,11 @@ from sqlmodel import Session, select, and_
 from fastapi import Query
 
 from data_processing import convert_lyrics_into_song_lines
-from elasticsearch_client import search_songs
+from elasticsearch_client import search_songs, search_artists
 from models.db_models import Song, Line, Artist
 from models.schemas import (
     SongCreate, SongReadShort, SongRead, SongReadForEdit,
-    SongReadForDisplay, SongIdsRequest, SongUpdate, ArtistCreate, ArtistRead, ArtistUpdate
+    SongReadForDisplay, SongIdsRequest, SongUpdate, ArtistCreate, ArtistRead, ArtistUpdate, ArtistReadWithSongs
 )
 
 class NotFoundError(Exception):
@@ -227,8 +227,44 @@ def db_delete_songs(request: SongIdsRequest, session: Session) -> List[Song]:
     session.commit()
     return songs
 
-def db_read_artists(skip: int, limit: int, session: Session) -> Sequence[Artist]:
-    """Fetch a paginated list of artists with their related songs."""
+def db_read_artists(skip: int, limit: int, search: str, session: Session) -> Sequence[Artist]:
+    """
+        Fetch paginated list of artists with their songs.
+
+        If a search term is provided, results are filtered using Elasticsearch by
+        artist name and related song titles. Highlights from Elasticsearch are attached
+        to each returned artist if search is active. Results maintain ES relevance order.
+    """
+    if search:
+        search_result = search_artists(search, limit=limit + skip)
+        if not search_result:
+            return []
+
+        artist_ids = [highlight['id'] for highlight in search_result]
+        statement = (
+            select(Artist)
+            .where(Artist.id.in_(artist_ids))
+            .offset(skip)
+            .limit(limit)
+            .options(selectinload(Artist.songs))
+        )
+        artists = session.exec(statement).all()
+
+        # Sort artists to match ES relevance order
+        id_to_index = {str(id): i for i, id in enumerate(artist_ids)}
+        artists.sort(key=lambda s: id_to_index.get(str(s.id), 0))
+
+        highlights = defaultdict(list)
+        for data in search_result:
+            highlights[int(data['id'])] = data['highlight']
+
+        result = []
+        for artist in artists:
+            artist_out = ArtistReadWithSongs.model_validate(artist)
+            artist_out.highlights = highlights[artist.id]
+            result.append(artist_out)
+        return result
+
     statement = (
         select(Artist)
         .offset(skip)

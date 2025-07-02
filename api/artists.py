@@ -16,7 +16,7 @@ router = APIRouter(tags=["Artists"], prefix="/artists")
     response_model=List[ArtistReadWithSongs],
     summary="Artist list"
 )
-def read_songs(skip: int = 0, limit: int = 100, session: Session = Depends(get_session)):
+def read_artists(skip: int = 0, limit: int = 100, search: str = "", session: Session = Depends(get_session)):
     """
         Retrieve a paginated list of artists along with their songs.
 
@@ -26,6 +26,11 @@ def read_songs(skip: int = 0, limit: int = 100, session: Session = Depends(get_s
             Number of records to skip for pagination (default is 0).\n
         `limit`: `int`, `optional`
             Maximum number of records to return (default is 100).\n
+        `search`: `str`, `optional`
+            A case-insensitive search query string.
+            Matches are performed across artist names and his song's titles.
+            If a match is found, highlighted snippets will be included in the response.
+            When specified, songs are ordered by relevance instead of creation order.\n
         `session`: `Session`
             Active database session (injected dependency).
 
@@ -34,7 +39,7 @@ def read_songs(skip: int = 0, limit: int = 100, session: Session = Depends(get_s
         `List[ArtistReadWithSongs]`
             A list of artists with their associated songs.
     """
-    return db_read_artists(skip=skip, limit=limit, session=session)
+    return db_read_artists(skip=skip, limit=limit, search=search, session=session)
 
 @router.get(
     path="/{artist_id}",
@@ -72,7 +77,7 @@ def read_artist(artist_id: int, session: Session = Depends(get_session)):
     response_model=ArtistRead,
     summary="Artist create"
 )
-def create_song(payload: ArtistCreate, session: Session = Depends(get_session)):
+def create_artist(payload: ArtistCreate, session: Session = Depends(get_session)):
     """
         Create a new artist.
 
@@ -137,7 +142,7 @@ def delete_artist(artist_id: int, session: Session = Depends(get_session)):
     response_model=ArtistReadWithSongs,
     summary="Artist update"
 )
-def update_song(artist_id: int, artist_data: ArtistUpdate, session: Session = Depends(get_session)):
+def update_artist(artist_id: int, artist_data: ArtistUpdate, session: Session = Depends(get_session)):
     """
         Update an existing artist by ID.
 
