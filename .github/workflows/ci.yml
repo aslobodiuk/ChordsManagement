@@ -12,7 +12,8 @@ jobs:
     env:
       DATABASE_URL: "sqlite:///:memory:"
       ELASTICSEARCH_URL: http://localhost:9200
-      ES_INDEX_NAME: songs-test
+      ES_SONG_INDEX_NAME: songs-test
+      ES_ARTIST_INDEX_NAME: artists-test
 
     services:
       elasticsearch:

@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 
-from elasticsearch_client import index_song, es
+from elasticsearch_client import index_song, es, index_artist
 from models.db_models import Song, Line, Chord, Artist
 from settings import get_settings
 
@@ -93,6 +93,8 @@ def populate_test_db(session: Session, num_songs: int = 1) -> list[Song]:
     for song in songs:
         session.refresh(song)
         index_song(song)
-    es.indices.refresh(index=settings.ES_INDEX_NAME)
+        index_artist(song.artist)
+    es.indices.refresh(index=settings.ES_SONG_INDEX_NAME)
+    es.indices.refresh(index=settings.ES_ARTIST_INDEX_NAME)
 
     return songs

@@ -57,7 +57,7 @@ def test_delete_song_es_index(client, test_session):
 
     for song_id in [songs[0].id, songs[1].id]:
         with pytest.raises(NotFoundError):
-            es.get(index=settings.ES_INDEX_NAME, id=str(song_id))
+            es.get(index=settings.ES_SONG_INDEX_NAME, id=str(song_id))
 
 def test_update_song(client, test_session):
     songs = populate_test_db(test_session, num_songs=2)
@@ -76,7 +76,7 @@ def test_update_song_es_index(client, test_session):
     payload = {"title": "New Title", "artist_id": songs[1].artist_id, "lyrics": f"{first_line}\n{second_line}"}
     client.put(f"/songs/{songs[0].id}", json=payload)
 
-    es_doc = es.get(index=settings.ES_INDEX_NAME, id=str(songs[0].id))
+    es_doc = es.get(index=settings.ES_SONG_INDEX_NAME, id=str(songs[0].id))
     assert es_doc["found"] is True
     assert "New Title" in es_doc["_source"]["title"]
     assert songs[1].artist.name in es_doc["_source"]["artist"]
@@ -115,10 +115,10 @@ def test_create_song_es_index(client, test_session):
     payload = {"title": "New Title", "artist_id": songs[0].artist_id, "lyrics": "Lyrics"}
     response = client.post("/songs", json=payload)
     song_id = response.json()["id"]
-    es.indices.refresh(index=settings.ES_INDEX_NAME)
+    es.indices.refresh(index=settings.ES_SONG_INDEX_NAME)
 
     # Query ES to check that song was indexed
-    es_doc = es.get(index=settings.ES_INDEX_NAME, id=str(song_id))
+    es_doc = es.get(index=settings.ES_SONG_INDEX_NAME, id=str(song_id))
     assert es_doc["found"] is True
 
     # Check ES document contents

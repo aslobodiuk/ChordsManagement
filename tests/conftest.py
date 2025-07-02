@@ -43,15 +43,19 @@ def es_client():
     client = OpenSearch(settings.ELASTICSEARCH_URL)
     yield client
     # Cleanup: delete test index after all tests finish
-    if client.indices.exists(index=settings.ES_INDEX_NAME):
-        client.indices.delete(index=settings.ES_INDEX_NAME)
+    if client.indices.exists(index=settings.ES_SONG_INDEX_NAME):
+        client.indices.delete(index=settings.ES_SONG_INDEX_NAME)
+    if client.indices.exists(index=settings.ES_ARTIST_INDEX_NAME):
+        client.indices.delete(index=settings.ES_ARTIST_INDEX_NAME)
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_es_index(es_client):
     # Create test index before tests run
-    if es_client.indices.exists(index=settings.ES_INDEX_NAME):
-        es_client.indices.delete(index=settings.ES_INDEX_NAME)
-    # Define mappings/settings if you want
+    if es_client.indices.exists(index=settings.ES_SONG_INDEX_NAME):
+        es_client.indices.delete(index=settings.ES_SONG_INDEX_NAME)
+    if es_client.indices.exists(index=settings.ES_ARTIST_INDEX_NAME):
+        es_client.indices.delete(index=settings.ES_ARTIST_INDEX_NAME)
+    # Define mappings/settings
     mappings = {
         "mappings": {
             "properties": {
@@ -61,5 +65,14 @@ def setup_es_index(es_client):
             }
         }
     }
-    es_client.indices.create(index=settings.ES_INDEX_NAME, body=mappings)
+    es_client.indices.create(index=settings.ES_SONG_INDEX_NAME, body=mappings)
+    mappings = {
+        "mappings": {
+            "properties": {
+                "name": {"type": "text"},
+                "songs": {"type": "text"}
+            }
+        }
+    }
+    es_client.indices.create(index=settings.ES_ARTIST_INDEX_NAME, body=mappings)
     yield

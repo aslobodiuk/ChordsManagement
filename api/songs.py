@@ -211,7 +211,7 @@ def delete_songs(
         songs = db_delete_songs(request, session)
         # remove from Elasticsearch
         for song in songs:
-            es.delete(index=settings.ES_INDEX_NAME, id=str(song.id), ignore=[404])
+            es.delete(index=settings.ES_SONG_INDEX_NAME, id=str(song.id), ignore=[404])
         return Response(status_code=204)
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
