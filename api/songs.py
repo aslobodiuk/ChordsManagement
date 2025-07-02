@@ -1,12 +1,13 @@
 from typing import List, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from fastapi.responses import StreamingResponse
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from data_processing import convert_songs_to_pdf
 from db import get_session
-from elasticsearch_client import index_song, es
+from elasticsearch_client import index_song, es, index_artist
+from models.db_models import Artist, Song
 from models.operations import (
     db_create_song, db_read_song, NotFoundError, db_read_songs, SongDisplayMode,
     db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
@@ -15,6 +16,7 @@ from models.schemas import (
     SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
 )
 from settings import get_settings
+from utils.api_utils import parse_comma_separated_ints
 from utils.pdf_utils import create_pdf_base
 
 router = APIRouter(tags=["Songs"], prefix="/songs")
@@ -30,6 +32,7 @@ def read_songs(
         skip: int = 0,
         limit: int = 100,
         search: str = "",
+        artists: List[int] = Depends(parse_comma_separated_ints("artists")),
         display: SongDisplayMode = Query(default=SongDisplayMode.full),
         session: Session = Depends(get_session)
 ):
@@ -47,6 +50,10 @@ def read_songs(
             Matches are performed across song title, artist, and lyrics.
             If a match is found, highlighted snippets will be included in the response.
             When specified, songs are ordered by relevance instead of creation order.\n
+        `artists`: `List[int]`, `optional`
+            Comma-separated list of artist IDs to filter songs by.
+            Example `artists=1,2,3`.
+            If omitted or empty, no filtering by artist is applied.\n
         `display` : `SongDisplayMode`, `optional`
             Controls which fields are included in the response model (e.g., `full`, `short`, `for_edit`, `for_display`).\n
         `session`: `Session`
@@ -57,7 +64,7 @@ def read_songs(
         `Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]`
             A list of songs matching the filter criteria and display mode.
     """
-    return db_read_songs(skip=skip, limit=limit, search=search, display=display, session=session)
+    return db_read_songs(skip=skip, limit=limit, search=search, artists=artists, display=display, session=session)
 
 @router.get(
     path="/{song_id}",
@@ -108,7 +115,7 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         Parameters
         ----------
         `song_in` : `SongCreate`
-            Input data containing title, artist, and raw lyrics string.\n
+            Input data containing title, artist_id, and raw lyrics string.\n
         `session` : `Session`
             Database session dependency.
 
@@ -122,9 +129,13 @@ def create_song(song_in: SongCreate, session: Session = Depends(get_session)):
         The raw lyrics string is parsed and converted into structured lines and chords
         before saving to the database.
     """
+    artist = session.exec(select(Artist).where(Artist.id == song_in.artist_id)).first()
+    if not artist:
+        raise HTTPException(status_code=404, detail="Artist with given ID does not exist")
     song = db_create_song(song_in, session)
     # add to Elasticsearch
     index_song(song)
+    index_artist(song.artist)
     return song
 
 @router.put(
@@ -145,7 +156,8 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
         `song_id` : `int`
             The ID of the song to update.\n
         `song_data` : `SongUpdate`
-            A Pydantic model containing the fields to update. Fields not set will be ignored.\n
+            A Pydantic model containing the fields to update (title, artist_id, and raw lyrics string).
+            Fields not set will be ignored.\n
         `session` : `Session`
             Database session dependency, injected by FastAPI.
 
@@ -160,16 +172,20 @@ def update_song(song_id: int, song_data: SongUpdate, session: Session = Depends(
             If no song is found with the provided ID.
         """
     try:
+        old_artist = session.exec(select(Artist).join(Artist.songs).where(Song.id == song_id)).first()
         song = db_edit_song(song_id, song_data, session)
         # update in Elasticsearch
         index_song(song)
+        if old_artist.id != song.artist.id:
+            index_artist(old_artist)
+        index_artist(song.artist)
         return song
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
 
 @router.delete(
     path="/",
-    response_model=List[SongRead],
+    response_model=None,
     summary="Song delete"
 )
 def delete_songs(
@@ -200,8 +216,10 @@ def delete_songs(
         songs = db_delete_songs(request, session)
         # remove from Elasticsearch
         for song in songs:
-            es.delete(index=settings.ES_INDEX_NAME, id=str(song.id), ignore=[404])
-        return songs
+            es.delete(index=settings.ES_SONG_INDEX_NAME, id=str(song.id), ignore=[404])
+            artist = session.exec(select(Artist).where(Artist.id == song.artist_id)).first()
+            index_artist(artist)
+        return Response(status_code=204)
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Song not found")
 

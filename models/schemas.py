@@ -6,6 +6,21 @@ from sqlmodel import SQLModel
 from data_processing import convert_song_lines_into_raw_lyrics, convert_song_lines_into_formatted_lyrics
 from models.db_models import Line
 
+class ArtistRead(SQLModel):
+    id: int
+    name: str
+
+class ArtistReadWithSongs(SQLModel):
+    id: int
+    name: str
+    songs: List["SongReadOnlyTitle"]
+    highlights: Optional[dict[str, List[str]]] = None
+
+class ArtistCreate(SQLModel):
+    name: str
+
+class ArtistUpdate(SQLModel):
+    name: str
 
 class ChordRead(SQLModel):
     id: int
@@ -19,10 +34,15 @@ class LineRead(SQLModel):
     chords: List[ChordRead] = []
 
 
+class SongReadOnlyTitle(SQLModel):
+    id: int
+    title: str
+
+
 class SongRead(SQLModel):
     id: int
     title: str
-    artist: str
+    artist: ArtistRead
     highlights: Optional[dict[str, List[str]]] = None
     lines: List[LineRead] = []
 
@@ -30,14 +50,14 @@ class SongRead(SQLModel):
 class SongReadShort(SQLModel):
     id: int
     title: str
-    artist: str
+    artist: ArtistRead
     highlights: Optional[dict[str, List[str]]] = None
 
 
 class SongReadForEdit(SQLModel):
     id: int
     title: str
-    artist: str
+    artist: ArtistRead
     highlights: Optional[dict[str, List[str]]] = None
 
     # Hide this from API schema and response
@@ -61,7 +81,7 @@ class SongReadForEdit(SQLModel):
 class SongReadForDisplay(SQLModel):
     id: int
     title: str
-    artist: str
+    artist: ArtistRead
     highlights: Optional[dict[str, List[str]]] = None
 
     # Hide this from API schema and response
@@ -84,10 +104,10 @@ class SongReadForDisplay(SQLModel):
 
 class SongCreate(BaseModel):
     title: str
-    artist: str
+    artist_id: int
     lyrics: str
 
-    @field_validator("title", "artist", "lyrics")
+    @field_validator("title", "lyrics")
     def not_blank(cls, value: str, info):
         if not value.strip():
             raise ValueError(f"`{info.field_name}` must not be empty or blank")
@@ -96,7 +116,7 @@ class SongCreate(BaseModel):
 
 class SongUpdate(BaseModel):
     title: Optional[str] = None
-    artist: Optional[str] = None
+    artist_id: Optional[int] = None
     lyrics: Optional[str] = None
 
 

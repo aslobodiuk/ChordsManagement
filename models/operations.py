@@ -4,15 +4,15 @@ from typing import List, Union
 
 from sqlalchemy import Sequence
 from sqlalchemy.orm import selectinload
-from sqlmodel import Session, select
+from sqlmodel import Session, select, and_
 from fastapi import Query
 
 from data_processing import convert_lyrics_into_song_lines
-from elasticsearch_client import search_songs
-from models.db_models import Song, Line
+from elasticsearch_client import search_songs, search_artists
+from models.db_models import Song, Line, Artist
 from models.schemas import (
     SongCreate, SongReadShort, SongRead, SongReadForEdit,
-    SongReadForDisplay, SongIdsRequest, SongUpdate
+    SongReadForDisplay, SongIdsRequest, SongUpdate, ArtistCreate, ArtistRead, ArtistUpdate, ArtistReadWithSongs
 )
 
 class NotFoundError(Exception):
@@ -94,7 +94,7 @@ def db_read_song(
     song = db_find_song(song_id, session)
     return choose_proper_display(display, song)
 
-def db_find_songs(skip: int, limit: int, search: str, session: Session):
+def db_find_songs(skip: int, limit: int, search: str, artists: List[int], session: Session):
     """
         Fetches songs with pagination and optional Elasticsearch-based search.
 
@@ -112,10 +112,12 @@ def db_find_songs(skip: int, limit: int, search: str, session: Session):
 
         song_ids = [highlight['id'] for highlight in search_result]
 
-        # Re-order songs by ID order from ES
+        conditions = [Song.id.in_(song_ids)]
+        if artists:
+            conditions.append(Song.artist_id.in_(artists))
         statement = (
             select(Song)
-            .where(Song.id.in_(song_ids))
+            .where(and_(*conditions))
             .options(selectinload(Song.lines).selectinload(Line.chords))
         )
         songs = session.exec(statement).all()
@@ -133,6 +135,8 @@ def db_find_songs(skip: int, limit: int, search: str, session: Session):
         .limit(limit)
         .options(selectinload(Song.lines).selectinload(Line.chords))
     )
+    if artists:
+        statement = statement.where(Song.artist_id.in_(artists))
     return session.exec(statement).all(), []
 
 def db_read_songs(
@@ -140,6 +144,7 @@ def db_read_songs(
     limit: int,
     search: str,
     session: Session,
+    artists: List[int] = Query(default=[]),
     display: SongDisplayMode = Query(default=SongDisplayMode.full)
 ) -> Union[List[SongRead], List[SongReadShort], List[SongReadForEdit], List[SongReadForDisplay]]:
     """
@@ -153,12 +158,13 @@ def db_read_songs(
         limit: Max number of songs to return.
         search: Search term (optional).
         session: Active DB session.
+        artists: Artist IDs to include (optional).
         display: Output format (e.g., full, short).
 
     Returns:
         List of song representations with optional highlights.
     """
-    songs, search_result = db_find_songs(skip, limit, search, session)
+    songs, search_result = db_find_songs(skip, limit, search, artists, session)
     highlights = defaultdict(list)
     for data in search_result:
         highlights[int(data['id'])] = data['highlight']
@@ -173,7 +179,7 @@ def db_create_song(song_in: SongCreate, session: Session) -> Song:
     song = convert_lyrics_into_song_lines(
         lyrics=song_in.lyrics,
         title=song_in.title,
-        artist=song_in.artist
+        artist_id=song_in.artist_id
     )
     session.add(song)
     session.commit()
@@ -196,15 +202,15 @@ def db_edit_song(song_id: int, song_data: SongUpdate, session: Session) -> Song:
         song = convert_lyrics_into_song_lines(lyrics=update_data["lyrics"], song=song)
 
         song.title = update_data.get("title", song.title)
-        song.artist = update_data.get("artist", song.artist)
+        song.artist_id = update_data.get("artist_id", song.artist_id)
 
         session.commit()
         session.refresh(song)
         return song
 
     # Handle title/artist if lyrics not provided
-    for field, value in update_data.items():
-        setattr(song, field, value)
+    song.title = update_data.get("title", song.title)
+    song.artist_id = update_data.get("artist_id", song.artist_id)
 
     session.commit()
     session.refresh(song)
@@ -220,3 +226,87 @@ def db_delete_songs(request: SongIdsRequest, session: Session) -> List[Song]:
         session.delete(song)
     session.commit()
     return songs
+
+def db_read_artists(skip: int, limit: int, search: str, session: Session) -> Sequence[Artist]:
+    """
+        Fetch paginated list of artists with their songs.
+
+        If a search term is provided, results are filtered using Elasticsearch by
+        artist name and related song titles. Highlights from Elasticsearch are attached
+        to each returned artist if search is active. Results maintain ES relevance order.
+    """
+    if search:
+        search_result = search_artists(search, limit=limit + skip)
+        if not search_result:
+            return []
+
+        artist_ids = [highlight['id'] for highlight in search_result]
+        statement = (
+            select(Artist)
+            .where(Artist.id.in_(artist_ids))
+            .offset(skip)
+            .limit(limit)
+            .options(selectinload(Artist.songs))
+        )
+        artists = session.exec(statement).all()
+
+        # Sort artists to match ES relevance order
+        id_to_index = {str(id): i for i, id in enumerate(artist_ids)}
+        artists.sort(key=lambda s: id_to_index.get(str(s.id), 0))
+
+        highlights = defaultdict(list)
+        for data in search_result:
+            highlights[int(data['id'])] = data['highlight']
+
+        result = []
+        for artist in artists:
+            artist_out = ArtistReadWithSongs.model_validate(artist)
+            artist_out.highlights = highlights[artist.id]
+            result.append(artist_out)
+        return result
+
+    statement = (
+        select(Artist)
+        .offset(skip)
+        .limit(limit)
+        .options(selectinload(Artist.songs))
+    )
+    return session.exec(statement).all()
+
+def db_read_artist(artist_id: int, session: Session) -> Artist:
+    """Retrieve a single artist by ID or raise NotFoundError if not found."""
+    artist: Artist | None = session.get(Artist, artist_id)
+    if artist is None:
+        raise NotFoundError(message="Artist with ID {} not found".format(artist_id))
+    return artist
+
+def db_create_artist(payload: ArtistCreate, session: Session) -> Artist:
+    """Create and persist a new artist from the given payload."""
+    artist = Artist(name=payload.name)
+    session.add(artist)
+    session.commit()
+    session.refresh(artist)
+    return artist
+
+def db_delete_artist(artist_id: int, session: Session):
+    """Delete an artist by ID or raise NotFoundError if not found."""
+    artist: Artist | None = session.get(Artist, artist_id)
+    if artist is None:
+        raise NotFoundError(message="Artist with ID {} not found".format(artist_id))
+    songs_ids = [song.id for song in artist.songs]
+    session.delete(artist)
+    session.commit()
+    return artist, songs_ids
+
+def db_edit_artist(artist_id: int, artist_data: ArtistUpdate, session: Session) -> Artist:
+    """
+    Update an existing artist's name and return the updated artist.
+
+    Raises:
+        NotFoundError: If the artist with the given ID does not exist.
+    """
+    artist = db_read_artist(artist_id, session)
+    artist.name = artist_data.name
+    session.commit()
+    session.refresh(artist)
+    return artist

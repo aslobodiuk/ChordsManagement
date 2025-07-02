@@ -8,7 +8,7 @@ from models.db_models import Song, Line, Chord
 
 CHORDS_PATTERN = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
 
-def convert_lyrics_into_song_lines(lyrics: str, title: str = None, artist: str = None, song: Song = None) -> Song:
+def convert_lyrics_into_song_lines(lyrics: str, title: str = None, artist_id: int = None, song: Song = None) -> Song:
     """
     Parse lyrics with chords and convert them into a structured `Song` object
     with nested `Line` and `Chord` instances.
@@ -19,7 +19,7 @@ def convert_lyrics_into_song_lines(lyrics: str, title: str = None, artist: str =
     :return: Song object
     """
     if not song:
-        song = Song(title=title, artist=artist)
+        song = Song(title=title, artist_id=artist_id)
     lines = lyrics.splitlines()
     for line in lines:
         line = Line(text=line.strip(), song=song)
@@ -87,7 +87,7 @@ def convert_songs_to_pdf(pdf: FPDF, songs: Sequence[Song]) -> io.BytesIO:
         pdf.cell(w=0, h=10, text=song.title, new_x="LMARGIN", new_y="NEXT", align="C")
         # add artist
         pdf.set_font("UbuntuMono", size=12, style="I")
-        pdf.cell(w=0, h=10, text=song.artist, new_x="LMARGIN", new_y="NEXT", align="R")
+        pdf.cell(w=0, h=10, text=song.artist.name, new_x="LMARGIN", new_y="NEXT", align="R")
         # add song
         pdf.set_font("UbuntuMono", size=8)
         for i in range(len(song.lines)):

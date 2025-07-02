@@ -1,11 +1,14 @@
 import pytest
 from pydantic import ValidationError
+from sqlmodel import select
 
+from models.db_models import Song
 from models.operations import (
     NotFoundError, SongDisplayMode, db_find_song, db_find_songs_by_id,
-    db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs, DISPLAY_MODES
+    db_find_all_songs, db_read_song, db_find_songs, db_create_song, db_edit_song, db_delete_songs, DISPLAY_MODES,
+    db_read_artist, db_read_artists, db_create_artist, db_delete_artist, db_edit_artist
 )
-from models.schemas import SongIdsRequest, SongCreate, SongUpdate
+from models.schemas import SongIdsRequest, SongCreate, SongUpdate, ArtistCreate, ArtistUpdate
 from tests.utils import populate_test_db
 
 
@@ -65,7 +68,7 @@ def test_db_read_song(display: SongDisplayMode, test_session):
     song = db_read_song(song_id=songs[0].id, session=test_session, display=display)
     assert song.id == songs[0].id
     assert song.title == songs[0].title
-    assert song.artist == songs[0].artist
+    assert song.artist.id == songs[0].artist.id
     assert isinstance(song, DISPLAY_MODES[display])
     if display == SongDisplayMode.full:
         assert len(song.lines) == len(songs[0].lines)
@@ -86,7 +89,7 @@ def test_db_read_song(display: SongDisplayMode, test_session):
 
 def test_db_find_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
-    found, _ = db_find_songs(skip=0, limit=100, search="", session=test_session)
+    found, _ = db_find_songs(skip=0, limit=100, search="", artists=[], session=test_session)
     assert len(found) == len(songs)
     assert [song.id for song in found] == [song.id for song in songs]
 
@@ -94,7 +97,7 @@ def test_db_find_songs(test_session):
     "search, expected_count, expected_field_name",
     [
         pytest.param(lambda songs: songs[0].title.split()[-1], 1, "title", id="search_by_title"),
-        pytest.param(lambda songs: songs[0].artist.split()[-1], 1, "artist", id="search_by_artist"),
+        pytest.param(lambda songs: songs[0].artist.name.split()[-1], 1, "artist", id="search_by_artist"),
         pytest.param(lambda songs: songs[0].lines[0].text.split()[0], 1, "lines", id="search_by_lyrics"),
         pytest.param(lambda songs: "NotExistedString", 0, None, id="search_not_found"),
         pytest.param(lambda songs: songs[0].title.split()[-1].upper(), 1, "title", id="search_case_insensitive")
@@ -103,7 +106,7 @@ def test_db_find_songs(test_session):
 def test_db_find_songs_with_search(search, expected_count, expected_field_name, test_session):
     songs = populate_test_db(test_session, num_songs=3)
     search_term = search(songs)
-    found, search_results = db_find_songs(skip=0, limit=100, search=search_term, session=test_session)
+    found, search_results = db_find_songs(skip=0, limit=100, search=search_term, artists=[], session=test_session)
 
     if expected_field_name is not None:
         highlights = search_results[0]['highlight']
@@ -122,52 +125,61 @@ def test_db_find_songs_with_search(search, expected_count, expected_field_name, 
 
     assert len(found) == expected_count
 
+def test_db_find_songs_artists_filtering(test_session):
+    songs = populate_test_db(test_session, num_songs=4)
+    expected_songs = songs[:2]
+    found, _ = db_find_songs(skip=0, limit=100, search="", artists=[song.artist_id for song in expected_songs], session=test_session)
+    assert len(found) == len(expected_songs)
+    assert [song.id for song in found] == [song.id for song in expected_songs]
+
 def test_db_create_song(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
     song_in = SongCreate(
         title="Song Title",
-        artist="Song Artist",
+        artist_id=songs[0].artist.id,
         lyrics="(Am)Song (Dm)Line 1\n(Am)Song (Dm)Line 2",
     )
     song = db_create_song(song_in, test_session)
     song_id = song.id
     created_song = db_find_song(song_id=song_id, session=test_session)
     assert created_song.title == "Song Title"
-    assert created_song.artist == "Song Artist"
+    assert created_song.artist.name == songs[0].artist.name
     assert len(created_song.lines) == 2
 
 def test_db_create_song_with_empty_data(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
     with pytest.raises(ValidationError) as exc_info:
-        SongCreate(title="", artist="", lyrics="")
+        SongCreate(title="", artist_id=songs[0].artist_id, lyrics="")
 
     errors = exc_info.value.errors()
-    assert len(errors) == 3
+    assert len(errors) == 2
 
-    expected_fields = ["title", "artist", "lyrics"]
+    expected_fields = ["title", "lyrics"]
     for field in expected_fields:
         assert any(
             e["loc"] == (field,) and f"`{field}` must not be empty or blank" in e["msg"] for e in errors
         )
 
 def test_db_edit_song_with_no_lyrics(test_session):
-    songs = populate_test_db(test_session, num_songs=1)
-    song_data = SongUpdate(title="New title", artist="New artist")
+    songs = populate_test_db(test_session, num_songs=2)
+    song_data = SongUpdate(title="New title", artist_id=songs[1].artist_id)
     db_edit_song(song_id=songs[0].id, song_data=song_data, session=test_session)
 
     created_song = db_find_song(song_id=songs[0].id, session=test_session)
     assert created_song.title == "New title"
-    assert created_song.artist == "New artist"
+    assert created_song.artist.name == songs[1].artist.name
     # Assert lyrics (lines) stayed the same
     assert [line.text for line in created_song.lines] == [line.text for line in songs[0].lines]
 
 def test_db_edit_song_with_lyrics(test_session):
-    songs = populate_test_db(test_session, num_songs=1)
-    song_data = SongUpdate(title="New title", artist="New artist", lyrics="(Am)Song (Dm)Line 1\n(Am)Song (Dm)Line 2")
+    songs = populate_test_db(test_session, num_songs=2)
+    song_data = SongUpdate(title="New title", artist_id=songs[1].artist_id, lyrics="(Am)Song (Dm)Line 1\n(Am)Song (Dm)Line 2")
     db_edit_song(song_id=songs[0].id, song_data=song_data, session=test_session)
 
     created_song = db_find_song(song_id=songs[0].id, session=test_session)
 
     assert created_song.title == "New title"
-    assert created_song.artist == "New artist"
+    assert created_song.artist.name == songs[1].artist.name
 
     # Assert lyrics were updated correctly
     expected_lines = ["Song Line 1", "Song Line 2"]
@@ -221,7 +233,7 @@ def test_db_delete_songs_all_cases(id_selector, expected_deleted, expected_remai
     if expect_error:
         with pytest.raises(NotFoundError) as exc_info:
             db_delete_songs(SongIdsRequest(song_ids=ids_for_delete), test_session)
-        assert exc_info.value.message == "Songs with such IDs were not found"
+            assert exc_info.value.message == "Songs with such IDs were not found"
     else:
         deleted_songs = db_delete_songs(SongIdsRequest(song_ids=ids_for_delete), test_session)
         deleted_ids = [song.id for song in deleted_songs]
@@ -229,3 +241,81 @@ def test_db_delete_songs_all_cases(id_selector, expected_deleted, expected_remai
 
         assert sorted(deleted_ids) == sorted(expected_deleted(songs))
         assert sorted(remaining_ids) == sorted(expected_remaining(songs))
+
+def test_db_read_artist(test_session):
+    songs = populate_test_db(test_session, num_songs=3)
+    artist = db_read_artist(artist_id=songs[0].artist_id, session=test_session)
+    assert artist.id == songs[0].artist_id
+    assert artist.name == songs[0].artist.name
+
+def test_db_read_artist_not_found(test_session):
+    with pytest.raises(NotFoundError) as exc_info:
+        db_read_artist(artist_id=999, session=test_session)
+    assert exc_info.value.message == "Artist with ID 999 not found"
+
+def test_db_read_artists(test_session):
+    songs = populate_test_db(test_session, num_songs=4)
+    expected_artists = [song.artist for song in songs]
+    found = db_read_artists(skip=0, limit=100, search="", session=test_session)
+    assert len(found) == len(expected_artists)
+    assert [artist.id for artist in found] == [artist.id for artist in expected_artists]
+    for artist in found:
+        artist_songs = test_session.exec(select(Song).where(Song.artist_id == artist.id)).all()
+        assert len(artist.songs) == len(artist_songs)
+
+def test_db_create_artist(test_session):
+    artist_name = "New Artist"
+    payload = ArtistCreate(name=artist_name)
+    artist = db_create_artist(payload, test_session)
+    artist_id = artist.id
+    created_artist = db_read_artist(artist_id, test_session)
+    assert created_artist.id == artist_id
+    assert created_artist.name == artist_name
+
+def test_db_delete_artist(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+    db_delete_artist(artist_id=songs[0].artist_id, session=test_session)
+    existing_songs = db_find_all_songs(session=test_session)
+    existing_artists = db_read_artists(skip=0, limit=100, search="", session=test_session)
+    assert len(existing_songs) == 0
+    assert len(existing_artists) == 0
+
+def test_db_edit_artist(test_session):
+    songs = populate_test_db(test_session, num_songs=1)
+    artist_data = ArtistUpdate(name="New Artist")
+    db_edit_artist(artist_id=songs[0].artist_id, artist_data=artist_data, session=test_session)
+
+    created_artist = db_read_artist(songs[0].artist_id, test_session)
+    assert created_artist.name == "New Artist"
+
+@pytest.mark.parametrize(
+    "search, expected_count, expected_field_name",
+    [
+        pytest.param(lambda songs: songs[0].artist.name.split()[-1], 1, "name", id="search_by_name"),
+        pytest.param(lambda songs: songs[0].title.split()[-1], 1, "songs", id="search_by_songs"),
+        pytest.param(lambda songs: "NotExistedString", 0, None, id="search_not_found"),
+        pytest.param(lambda songs: songs[0].title.split()[-1].upper(), 1, "songs", id="search_case_insensitive")
+    ]
+)
+def test_db_read_artists_with_search(search, expected_count, expected_field_name, test_session):
+    songs = populate_test_db(test_session, num_songs=3)
+    search_term = search(songs)
+    found = db_read_artists(skip=0, limit=100, search=search_term, session=test_session)
+
+    if expected_field_name is not None:
+        highlights = found[0].highlights
+
+        assert found[0].id == songs[0].artist_id
+        assert found[0].name == songs[0].artist.name
+
+        field_assertion_msg = f"Expected highlight field '{expected_field_name}', got: {highlights}"
+        assert expected_field_name in highlights, field_assertion_msg
+
+        term_assertion_msg = f"Expected term '<em>{search_term}</em>' in highlights: {highlights}"
+        expected_highlight = f"<em>{search_term}</em>".upper()
+        actual_highlight = highlights[expected_field_name][0].upper()
+        assert expected_highlight in actual_highlight, term_assertion_msg
+    else:
+        assert found == []
+
+    assert len(found) == expected_count
