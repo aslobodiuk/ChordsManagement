@@ -269,4 +269,39 @@ def export_to_pdf(request: SongIdsRequest = None, session: Session = Depends(get
     summary="Normalize lyrics"
 )
 def normalize_song(data: LyricsInput, session: Session = Depends(get_session)):
+    """
+        Normalize raw song lyrics into a standardized format with inline chords.
+
+        This endpoint processes song lyrics where chords and lyrics may be in different formats,
+        such as chords listed on one line and lyrics on the next, or chords embedded directly into the lyrics.
+        It converts these structures into a unified format where chords are embedded inline in brackets.
+
+        Parameters
+        ----------
+        data : `LyricsInput`
+            An object containing the `lyrics` string to normalize. The lyrics may include chord lines
+            and lyric lines in a variety of formats.
+        session : `Session`, optional
+            SQLModel database session. Injected automatically via dependency.
+
+        Returns
+        -------
+        `str`
+            A single string representing the normalized lyrics with chords embedded inline,
+            using the format `(Chord)word`.
+
+        Examples
+        --------
+        Input format:\n
+                D                   A           A7  Asus4    A       D\n
+            Hey Jude, don’t make it bad, take a sad song and make it better\n
+
+        Output format:\n
+            Hey (D)Jude, don’t make it (A)bad, take a (A7)sad (Asus4)song and (A)make it (D)better
+
+        Notes
+        -----
+        - This endpoint does not store any data in the database.
+        - It is intended for real-time normalization and can be used by a frontend editor.
+    """
     return normalize_lyrics(data.lyrics)

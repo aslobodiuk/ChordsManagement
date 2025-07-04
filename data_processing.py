@@ -185,6 +185,12 @@ def embed_inline_chords(line: str) -> str:
     return f"{chord_part} {lyrics_part}".strip()
 
 def normalize_lyrics(lyrics: str) -> str:
+    """
+    Convert chords and lyrics from mixed line formats into inline chord format.
+
+    Processes separate chord lines followed by lyric lines,
+    as well as inline chords, returning normalized lyrics as a single string.
+    """
     lines = lyrics.splitlines()
     result = []
     skip_next = False
