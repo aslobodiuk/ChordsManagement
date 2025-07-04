@@ -122,3 +122,6 @@ class SongUpdate(BaseModel):
 
 class SongIdsRequest(BaseModel):
     song_ids: Optional[List[int]]
+
+class LyricsInput(BaseModel):
+    lyrics: str

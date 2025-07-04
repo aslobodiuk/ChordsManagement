@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
-from data_processing import convert_songs_to_pdf
+from data_processing import convert_songs_to_pdf, normalize_lyrics
 from db import get_session
 from elasticsearch_client import index_song, es, index_artist
 from models.db_models import Artist, Song
@@ -13,7 +13,7 @@ from models.operations import (
     db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
 )
 from models.schemas import (
-    SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
+    SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate, LyricsInput
 )
 from settings import get_settings
 from utils.api_utils import parse_comma_separated_ints
@@ -262,3 +262,11 @@ def export_to_pdf(request: SongIdsRequest = None, session: Session = Depends(get
         media_type="application/pdf",
         headers={"Content-Disposition": "inline; filename=streamed.pdf"}
     )
+
+@router.post(
+    path="/normalize",
+    response_model=None,
+    summary="Normalize lyrics"
+)
+def normalize_song(data: LyricsInput, session: Session = Depends(get_session)):
+    return normalize_lyrics(data.lyrics)

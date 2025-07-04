@@ -7,6 +7,9 @@ from sqlalchemy import Sequence
 from models.db_models import Song, Line, Chord
 
 CHORDS_PATTERN = r"\(([A-G][#b]?(?:m|maj|min|dim|aug|sus|add)?\d*(?:/[A-G][#b]?)?)\)"
+CHORD_NORMALIZATION_PATTERN = r"[A-G][#b]?(m|maj|min|dim|aug|sus|add)?\d*(/[A-G][#b]?)?"
+CHORD_REGEX = re.compile(rf"\b{CHORD_NORMALIZATION_PATTERN}\b")
+CHORD_RAW_REGEX = re.compile(rf"{CHORD_NORMALIZATION_PATTERN}")
 
 def convert_lyrics_into_song_lines(lyrics: str, title: str = None, artist_id: int = None, song: Song = None) -> Song:
     """
@@ -120,3 +123,86 @@ def convert_songs_to_pdf(pdf: FPDF, songs: Sequence[Song]) -> io.BytesIO:
     pdf_bytes.seek(0)
 
     return pdf_bytes
+
+def is_chord_line(line: str) -> bool:
+    """Determine if a line mostly consists of chords and spaces."""
+    tokens = line.strip().split()
+    if not tokens:
+        return False
+    return sum(1 for t in tokens if CHORD_REGEX.fullmatch(t)) / len(tokens) > 0.6
+
+def is_inline_chord_lyrics(line: str) -> bool:
+    """
+    Check if line contains chords immediately followed by lyrics,
+    e.g. "C G DmHello world".
+    """
+    match = re.match(rf"^((?:{CHORD_REGEX.pattern}\s+)*){CHORD_RAW_REGEX.pattern}[^\s]", line.strip())
+    return bool(match)
+
+def merge_chord_and_lyric_lines(chord_line: str, lyric_line: str) -> str:
+    """Align chords to lyrics based on position"""
+    merged = ""
+    i = 0
+    chords = [(m.start(), m.group()) for m in CHORD_REGEX.finditer(chord_line)]
+    chord_idx = 0
+    while i < len(lyric_line):
+        if chord_idx < len(chords) and i == chords[chord_idx][0]:
+            chord = chords[chord_idx][1]
+            merged += f"({chord})"
+            chord_idx += 1
+        merged += lyric_line[i]
+        i += 1
+    return merged
+
+def embed_inline_chords(line: str) -> str:
+    """
+    Parses lines like 'D A A7 DHey Jude...' and places all chords in brackets,
+    including those attached to the first lyric (e.g., DHey -> (D)Hey).
+    """
+    tokens = line.strip().split()
+    chords = []
+    lyrics_tokens = []
+
+    for token in tokens:
+        if CHORD_REGEX.fullmatch(token):
+            chords.append(token)
+        elif match := re.match(rf"^({CHORD_NORMALIZATION_PATTERN})(\w+)", token):
+            chord = match.group(1)
+            word = match.group(len(match.groups()))
+            chords.append(chord)
+            lyrics_tokens.append(word)
+            break
+        else:
+            lyrics_tokens.append(token)
+            break
+
+    # Rest of lyrics
+    lyrics_tokens += tokens[len(chords) + len(lyrics_tokens) - 1:]
+
+    # Combine
+    chord_part = "".join(f"({c})" for c in chords)
+    lyrics_part = " ".join(lyrics_tokens)
+    return f"{chord_part} {lyrics_part}".strip()
+
+def normalize_lyrics(lyrics: str) -> str:
+    lines = lyrics.splitlines()
+    result = []
+    skip_next = False
+
+    for i, line in enumerate(lines):
+        if skip_next:
+            skip_next = False
+            continue
+
+        if i + 1 < len(lines) and is_chord_line(line):
+            chord_line = line
+            lyric_line = lines[i + 1]
+            merged = merge_chord_and_lyric_lines(chord_line, lyric_line)
+            result.append(merged)
+            skip_next = True
+        elif is_inline_chord_lyrics(line):
+            # Inline chords followed by lyrics (no newline)
+            result.append(embed_inline_chords(line))
+        else:
+            result.append(line)
+    return "\n".join(result)
