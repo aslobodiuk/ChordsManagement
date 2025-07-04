@@ -91,7 +91,7 @@ def test_db_find_songs(test_session):
     songs = populate_test_db(test_session, num_songs=3)
     found, _ = db_find_songs(skip=0, limit=100, search="", artists=[], session=test_session)
     assert len(found) == len(songs)
-    assert [song.id for song in found] == [song.id for song in songs]
+    assert [song.id for song in found] == [song.id for song in sorted(songs, key=lambda x: (x.artist.name, x.title))]
 
 @pytest.mark.parametrize(
     "search, expected_count, expected_field_name",
@@ -130,7 +130,7 @@ def test_db_find_songs_artists_filtering(test_session):
     expected_songs = songs[:2]
     found, _ = db_find_songs(skip=0, limit=100, search="", artists=[song.artist_id for song in expected_songs], session=test_session)
     assert len(found) == len(expected_songs)
-    assert [song.id for song in found] == [song.id for song in expected_songs]
+    assert [song.id for song in found] == [song.id for song in sorted(expected_songs, key=lambda x: (x.artist.name, x.title))]
 
 def test_db_create_song(test_session):
     songs = populate_test_db(test_session, num_songs=1)
@@ -258,7 +258,7 @@ def test_db_read_artists(test_session):
     expected_artists = [song.artist for song in songs]
     found = db_read_artists(skip=0, limit=100, search="", session=test_session)
     assert len(found) == len(expected_artists)
-    assert [artist.id for artist in found] == [artist.id for artist in expected_artists]
+    assert [artist.id for artist in found] == [artist.id for artist in sorted(expected_artists, key=lambda x: x.name)]
     for artist in found:
         artist_songs = test_session.exec(select(Song).where(Song.artist_id == artist.id)).all()
         assert len(artist.songs) == len(artist_songs)

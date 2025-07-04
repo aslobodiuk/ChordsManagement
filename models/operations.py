@@ -131,9 +131,11 @@ def db_find_songs(skip: int, limit: int, search: str, artists: List[int], sessio
     # fallback for no search
     statement = (
         select(Song)
+        .join(Artist, Song.artist_id == Artist.id)
         .offset(skip)
         .limit(limit)
         .options(selectinload(Song.lines).selectinload(Line.chords))
+        .order_by(Artist.name, Song.title)
     )
     if artists:
         statement = statement.where(Song.artist_id.in_(artists))
@@ -270,6 +272,7 @@ def db_read_artists(skip: int, limit: int, search: str, session: Session) -> Seq
         .offset(skip)
         .limit(limit)
         .options(selectinload(Artist.songs))
+        .order_by(Artist.name)
     )
     return session.exec(statement).all()
 

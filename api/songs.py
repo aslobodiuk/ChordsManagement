@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Body, Response
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, select
 
-from data_processing import convert_songs_to_pdf
+from data_processing import convert_songs_to_pdf, normalize_lyrics
 from db import get_session
 from elasticsearch_client import index_song, es, index_artist
 from models.db_models import Artist, Song
@@ -13,7 +13,7 @@ from models.operations import (
     db_delete_songs, db_edit_song, db_find_songs_by_id, db_find_all_songs
 )
 from models.schemas import (
-    SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate
+    SongRead, SongCreate, SongReadShort, SongIdsRequest, SongReadForEdit, SongReadForDisplay, SongUpdate, LyricsInput
 )
 from settings import get_settings
 from utils.api_utils import parse_comma_separated_ints
@@ -262,3 +262,46 @@ def export_to_pdf(request: SongIdsRequest = None, session: Session = Depends(get
         media_type="application/pdf",
         headers={"Content-Disposition": "inline; filename=streamed.pdf"}
     )
+
+@router.post(
+    path="/normalize",
+    response_model=None,
+    summary="Normalize lyrics"
+)
+def normalize_song(data: LyricsInput, session: Session = Depends(get_session)):
+    """
+        Normalize raw song lyrics into a standardized format with inline chords.
+
+        This endpoint processes song lyrics where chords and lyrics may be in different formats,
+        such as chords listed on one line and lyrics on the next, or chords embedded directly into the lyrics.
+        It converts these structures into a unified format where chords are embedded inline in brackets.
+
+        Parameters
+        ----------
+        data : `LyricsInput`
+            An object containing the `lyrics` string to normalize. The lyrics may include chord lines
+            and lyric lines in a variety of formats.
+        session : `Session`, optional
+            SQLModel database session. Injected automatically via dependency.
+
+        Returns
+        -------
+        `str`
+            A single string representing the normalized lyrics with chords embedded inline,
+            using the format `(Chord)word`.
+
+        Examples
+        --------
+        Input format:\n
+                D                   A           A7  Asus4    A       D\n
+            Hey Jude, don’t make it bad, take a sad song and make it better\n
+
+        Output format:\n
+            Hey (D)Jude, don’t make it (A)bad, take a (A7)sad (Asus4)song and (A)make it (D)better
+
+        Notes
+        -----
+        - This endpoint does not store any data in the database.
+        - It is intended for real-time normalization and can be used by a frontend editor.
+    """
+    return normalize_lyrics(data.lyrics)
